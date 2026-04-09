@@ -47,6 +47,7 @@ public sealed record RecipeDef(
     string DisplayName,
     IReadOnlyDictionary<string, int> Inputs,
     IReadOnlyDictionary<string, int> Outputs,
+    string? RequiredStationMaterialId,
     string SkillId,
     int SkillGain);
 
@@ -201,6 +202,11 @@ public sealed class PlayerProfile
     public Dictionary<string, SkillProgress> SkillLevels { get; } = new(StringComparer.OrdinalIgnoreCase);
     public HashSet<string> PerkUnlocks { get; } = new(StringComparer.OrdinalIgnoreCase);
     public HashSet<string> BossBonuses { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public HashSet<string> CraftedRecipes { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public HashSet<string> DefeatedEnemyFamilies { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public HashSet<string> MinedMaterialIds { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public Dictionary<string, int> PlacedMaterialCounts { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public int SectorTransitionsCompleted { get; set; }
     public string DifficultyPresetId { get; set; } = "frontier";
 }
 

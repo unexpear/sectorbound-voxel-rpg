@@ -5,7 +5,17 @@ static class Program
     [STAThread]
     static void Main()
     {
+        ClientDiagnostics.Install();
+        ClientDiagnostics.WriteInfo("Starting Sectorbound client.");
         ApplicationConfiguration.Initialize();
-        Application.Run(new ViewerForm());
-    }    
+        try
+        {
+            Application.Run(new RuntimeForm());
+        }
+        catch (Exception exception)
+        {
+            ClientDiagnostics.WriteException("startup", exception);
+            throw;
+        }
+    }
 }

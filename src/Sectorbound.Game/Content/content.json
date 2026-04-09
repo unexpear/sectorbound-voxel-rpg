@@ -24,6 +24,7 @@
       "displayName": "Shelter Blocks",
       "inputs": { "timber": 2, "loomstone-fragment": 2 },
       "outputs": { "shelter-block": 4 },
+      "requiredStationMaterialId": "workbench-block",
       "skillId": "crafting",
       "skillGain": 28
     },
@@ -32,6 +33,7 @@
       "displayName": "Rift Sigil Core",
       "inputs": { "crystal-shard": 2, "emberstone-shard": 1 },
       "outputs": { "rift-sigil-core": 1 },
+      "requiredStationMaterialId": "workbench-block",
       "skillId": "crafting",
       "skillGain": 45
     }

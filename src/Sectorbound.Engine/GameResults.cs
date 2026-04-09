@@ -6,3 +6,4 @@ public sealed record CombatResult(bool Success, string Message, string Encounter
 public sealed record SectorTransitionResult(int FromSectorIndex, int ToSectorIndex, string Message);
 public sealed record DeathPenaltyResult(IReadOnlyDictionary<string, int> LostItems, int TotalSkillExperienceLost, bool CorpseRunEnabled);
 public sealed record PlanetSummary(int PlanetIndex, string Name, string BiomeName, IReadOnlyList<string> SpawnTable, IReadOnlyList<string> StructureGenerators);
+public sealed record SliceGoalProgress(string Id, string DisplayName, bool IsComplete, string Detail);

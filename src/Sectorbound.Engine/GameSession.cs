@@ -103,6 +103,7 @@ public sealed partial class GameSession
         builder.AppendLine($"Planet {CurrentPlanetIndex}: {CurrentPlanet.DisplayName} ({CurrentPlanet.BiomeRules.DisplayName})");
         builder.AppendLine($"Boss: {_content.GetBoss(Sector.SectorBossId).DisplayName}");
         builder.AppendLine($"Difficulty: {CurrentDifficulty.DisplayName}");
+        builder.AppendLine($"Workbench: {(CurrentPlanetHasPlacedBlock("workbench-block") ? "placed on this planet" : "not placed on this planet")}");
         builder.AppendLine($"Inventory: {FormatKeyValuePairs(Player.Inventory)}");
         builder.AppendLine($"Skills: {FormatSkills()}");
         builder.AppendLine($"Perks: {(Player.PerkUnlocks.Count == 0 ? "none" : string.Join(", ", Player.PerkUnlocks.OrderBy(x => x)))}");

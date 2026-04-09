@@ -2,6 +2,10 @@ namespace Sectorbound.Engine;
 
 public sealed partial class GameSession
 {
+    public int MinWorldY => WorldFloor;
+    public int MaxWorldY => WorldCeiling;
+    public int ChunkSizeInVoxels => ChunkSize;
+
     public IReadOnlyList<PlanetSummary> GetPlanetSummaries() =>
         Sector.LoadedPlanets
             .Select(x => new PlanetSummary(x.PlanetIndex, x.DisplayName, x.BiomeRules.DisplayName, x.SpawnTables, x.StructureGenerators))
@@ -10,6 +14,10 @@ public sealed partial class GameSession
     public string GetMaterialIdAtCurrentPlanet(Int3 worldPosition) => ResolveMaterial(CurrentPlanet, worldPosition);
 
     public MaterialDef InspectMaterialAtCurrentPlanet(Int3 worldPosition) => _content.GetMaterial(GetMaterialIdAtCurrentPlanet(worldPosition));
+
+    public bool IsSolidAtCurrentPlanet(Int3 worldPosition) => InspectMaterialAtCurrentPlanet(worldPosition).IsSolid;
+
+    public ChunkCoordinate GetChunkCoordinateForWorldPosition(Int3 worldPosition) => ToChunkCoordinate(worldPosition);
 
     public int GetSurfaceHeight(int x, int z) => CalculateSurfaceHeight(CurrentPlanet, x, z);
 
@@ -20,6 +28,13 @@ public sealed partial class GameSession
     }
 
     public int GetInventoryCount(string itemId) => Player.Inventory.TryGetValue(itemId, out var count) ? count : 0;
+
+    public string DescribePerks() =>
+        Player.PerkUnlocks.Count == 0
+            ? "none"
+            : string.Join(", ", Player.PerkUnlocks.OrderBy(x => x, StringComparer.OrdinalIgnoreCase));
+
+    public bool CurrentPlanetHasPlacedBlock(string materialId) => PlanetHasPlacedBlock(CurrentPlanet, materialId);
 
     public SkillProgress GetSkillProgress(string skillId)
     {
@@ -64,6 +79,7 @@ public sealed partial class GameSession
             AddInventory(material.DropItemId, material.DropCount);
         }
 
+        Player.MinedMaterialIds.Add(material.Id);
         AwardSkillExperience("mining", 18 + (material.Hardness * 8));
 
         return new BlockActionResult(
@@ -94,6 +110,7 @@ public sealed partial class GameSession
         chunk.VoxelMaterials[localPosition] = material.Id;
         chunk.IsDirty = true;
 
+        Player.PlacedMaterialCounts[material.Id] = GetPlacedMaterialCount(material.Id) + 1;
         AwardSkillExperience("crafting", 8);
         return new BlockActionResult(true, $"Placed {material.DisplayName} at {worldPosition}.", material.Id, string.Empty, 0);
     }
@@ -101,6 +118,15 @@ public sealed partial class GameSession
     public CraftResult Craft(string recipeId)
     {
         var recipe = _content.GetRecipe(recipeId);
+        if (!string.IsNullOrWhiteSpace(recipe.RequiredStationMaterialId)
+            && !PlanetHasPlacedBlock(CurrentPlanet, recipe.RequiredStationMaterialId))
+        {
+            var stationMaterial = _content.GetMaterial(recipe.RequiredStationMaterialId);
+            return new CraftResult(
+                false,
+                $"Place a {stationMaterial.DisplayName} on {CurrentPlanet.DisplayName} before crafting {recipe.DisplayName}.");
+        }
+
         foreach (var requirement in recipe.Inputs)
         {
             if (GetInventoryCount(requirement.Key) < requirement.Value)
@@ -119,6 +145,7 @@ public sealed partial class GameSession
             AddInventory(output.Key, output.Value);
         }
 
+        Player.CraftedRecipes.Add(recipe.Id);
         AwardSkillExperience(recipe.SkillId, recipe.SkillGain);
         return new CraftResult(true, $"Crafted {recipe.DisplayName}.");
     }
@@ -148,6 +175,7 @@ public sealed partial class GameSession
             AddInventory(lootDrop.Key, lootDrop.Value);
         }
 
+        Player.DefeatedEnemyFamilies.Add(enemy.Family);
         return new CombatResult(true, $"Defeated {enemy.DisplayName}.", enemy.Id, new Dictionary<string, int>(enemy.Loot));
     }
 
@@ -238,6 +266,7 @@ public sealed partial class GameSession
         CurrentSectorIndex += 1;
         Sector = LoadOrGenerateSector(CurrentSectorIndex);
         CurrentPlanetIndex = 0;
+        Player.SectorTransitionsCompleted += 1;
         Sector.TransitionState = new TransitionState(
             TransitionPhase.Activating,
             fromSector,
@@ -247,4 +276,67 @@ public sealed partial class GameSession
 
         return new SectorTransitionResult(fromSector, CurrentSectorIndex, Sector.TransitionState.Message);
     }
+
+    public IReadOnlyList<SliceGoalProgress> GetVerticalSliceProgress()
+    {
+        var shelterPlaced = GetPlacedMaterialCount("shelter-block");
+        var workbenchPlaced = GetPlacedMaterialCount("workbench-block");
+        var enemyFamilies = Player.DefeatedEnemyFamilies.Count;
+        var bossDefeated = Player.BossBonuses.Count > 0;
+
+        return
+        [
+            new SliceGoalProgress(
+                "mine-anything",
+                "Mine resources",
+                GetSkillProgress("mining").LifetimeExperience > 0,
+                GetSkillProgress("mining").LifetimeExperience > 0
+                    ? $"{Player.MinedMaterialIds.Count} material types recovered."
+                    : "Break terrain to start the progression loop."),
+            new SliceGoalProgress(
+                "craft-shelter",
+                "Craft shelter blocks",
+                Player.CraftedRecipes.Contains("shelter-block"),
+                Player.CraftedRecipes.Contains("shelter-block")
+                    ? "Shelter recipe crafted."
+                    : "Place a workbench, then craft shelter blocks."),
+            new SliceGoalProgress(
+                "build-shelter",
+                "Build a shelter",
+                shelterPlaced >= 4,
+                $"{shelterPlaced}/4 shelter blocks placed."),
+            new SliceGoalProgress(
+                "place-workbench",
+                "Place a workbench",
+                workbenchPlaced >= 1,
+                workbenchPlaced >= 1
+                    ? "Workbench placed on a planet."
+                    : "Craft and place a workbench-block."),
+            new SliceGoalProgress(
+                "enemy-families",
+                "Defeat three enemy families",
+                enemyFamilies >= 3,
+                $"{enemyFamilies}/3 families defeated."),
+            new SliceGoalProgress(
+                "boss-kill",
+                "Defeat the sector boss",
+                bossDefeated,
+                bossDefeated
+                    ? $"Boss bonuses: {string.Join(", ", Player.BossBonuses.OrderBy(x => x, StringComparer.OrdinalIgnoreCase))}"
+                    : "Use combat progression to challenge the sector boss."),
+            new SliceGoalProgress(
+                "next-sector",
+                "Travel to the next sector",
+                Player.SectorTransitionsCompleted > 0 || CurrentSectorIndex > 0,
+                $"Sectors advanced: {Math.Max(Player.SectorTransitionsCompleted, CurrentSectorIndex)}")
+        ];
+    }
+
+    private int GetPlacedMaterialCount(string materialId) =>
+        Player.PlacedMaterialCounts.TryGetValue(materialId, out var count) ? count : 0;
+
+    private static bool PlanetHasPlacedBlock(PlanetRuntime planet, string materialId) =>
+        planet.ChunkRegistry.Values.Any(chunk =>
+            chunk.PlacedBlocks.Values.Any(placed =>
+                string.Equals(placed, materialId, StringComparison.OrdinalIgnoreCase)));
 }

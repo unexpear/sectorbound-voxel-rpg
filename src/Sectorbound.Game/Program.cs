@@ -188,10 +188,10 @@ internal static class Program
         MineForShelterStone(session, 1, 0);
 
         PrintResult(session.Craft("workbench-block"));
-        PrintResult(session.Craft("shelter-block"));
 
         var buildY = session.GetSurfaceHeight(0, 1) + 1;
         PrintResult(session.PlaceBlock(new Int3(0, buildY, 1), "workbench-block"));
+        PrintResult(session.Craft("shelter-block"));
         PrintResult(session.PlaceBlock(new Int3(1, buildY, 1), "shelter-block"));
         PrintResult(session.PlaceBlock(new Int3(2, buildY, 1), "shelter-block"));
         PrintResult(session.PlaceBlock(new Int3(1, buildY + 1, 1), "shelter-block"));

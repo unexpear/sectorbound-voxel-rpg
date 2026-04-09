@@ -58,10 +58,11 @@ public static class ContentLoader
         public string DisplayName { get; set; } = string.Empty;
         public Dictionary<string, int> Inputs { get; set; } = [];
         public Dictionary<string, int> Outputs { get; set; } = [];
+        public string? RequiredStationMaterialId { get; set; }
         public string SkillId { get; set; } = string.Empty;
         public int SkillGain { get; set; }
 
-        public RecipeDef ToRuntime() => new(Id, DisplayName, Inputs, Outputs, SkillId, SkillGain);
+        public RecipeDef ToRuntime() => new(Id, DisplayName, Inputs, Outputs, RequiredStationMaterialId, SkillId, SkillGain);
     }
 
     private sealed class EnemyData

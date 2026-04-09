@@ -72,12 +72,38 @@ public sealed class GameSessionTests : IDisposable
 
         MineShelterColumn(session, 0, 0);
         MineShelterColumn(session, 1, 0);
+        session.Craft("workbench-block");
+        var surface = session.GetSurfaceVoxel(0, 0);
+        session.PlaceBlock(new Int3(surface.X, surface.Y + 1, surface.Z + 1), "workbench-block");
         session.FightEnemy(session.CurrentPlanet.SpawnTables.First(), CombatApproach.Blade);
         session.Craft("shelter-block");
 
         Assert.True(session.GetSkillProgress("mining").LifetimeExperience > 0);
         Assert.True(session.GetSkillProgress("combat").LifetimeExperience > 0);
         Assert.True(session.GetSkillProgress("crafting").LifetimeExperience > 0);
+    }
+
+    [Fact]
+    public void ShelterCraftingRequiresWorkbenchPlacedOnCurrentPlanet()
+    {
+        var session = GameSession.CreateNew(_content, _tempSaveRoot, "workbench", 7788);
+        session.TravelToPlanet(0);
+
+        MineShelterColumn(session, 0, 0);
+        MineShelterColumn(session, 1, 0);
+        var craftedWorkbench = session.Craft("workbench-block");
+        var blockedCraft = session.Craft("shelter-block");
+
+        var surface = session.GetSurfaceVoxel(0, 0);
+        var workbenchSpot = new Int3(surface.X, surface.Y + 1, surface.Z + 1);
+        var placedWorkbench = session.PlaceBlock(workbenchSpot, "workbench-block");
+        var unlockedCraft = session.Craft("shelter-block");
+
+        Assert.True(craftedWorkbench.Success);
+        Assert.False(blockedCraft.Success);
+        Assert.Contains("Workbench", blockedCraft.Message);
+        Assert.True(placedWorkbench.Success);
+        Assert.True(unlockedCraft.Success);
     }
 
     [Fact]
@@ -140,6 +166,62 @@ public sealed class GameSessionTests : IDisposable
         Assert.True(hardPenalty.LostItems["timber"] > easyPenalty.LostItems["timber"]);
         Assert.False(easyPenalty.CorpseRunEnabled);
         Assert.True(hardPenalty.CorpseRunEnabled);
+    }
+
+    [Fact]
+    public void WorldQueriesExposeStableChunkCoordinatesAcrossBoundaries()
+    {
+        var session = GameSession.CreateNew(_content, _tempSaveRoot, "chunks", 1003);
+
+        Assert.Equal(16, session.ChunkSizeInVoxels);
+        Assert.Equal(0, session.MinWorldY);
+        Assert.Equal(48, session.MaxWorldY);
+        Assert.Equal(new ChunkCoordinate(0, 0, 0), session.GetChunkCoordinateForWorldPosition(new Int3(0, 0, 0)));
+        Assert.Equal(new ChunkCoordinate(0, 0, 0), session.GetChunkCoordinateForWorldPosition(new Int3(15, 15, 15)));
+        Assert.Equal(new ChunkCoordinate(-1, 0, -1), session.GetChunkCoordinateForWorldPosition(new Int3(-1, 4, -1)));
+        Assert.Equal(new ChunkCoordinate(1, 0, 1), session.GetChunkCoordinateForWorldPosition(new Int3(16, 2, 16)));
+    }
+
+    [Fact]
+    public void VerticalSliceProgressPersistsAcrossSaveReloadAndSectorTravel()
+    {
+        var session = GameSession.CreateNew(_content, _tempSaveRoot, "progress", 1004);
+        session.TravelToPlanet(0);
+
+        MineShelterColumn(session, 0, 0);
+        MineShelterColumn(session, 1, 0);
+        session.Craft("workbench-block");
+
+        var surface = session.GetSurfaceVoxel(0, 0);
+        session.PlaceBlock(new Int3(surface.X, surface.Y + 1, surface.Z + 1), "workbench-block");
+        session.Craft("shelter-block");
+        for (var offset = 1; offset <= 4; offset++)
+        {
+            session.PlaceBlock(new Int3(surface.X + offset, surface.Y + 1, surface.Z), "shelter-block");
+        }
+
+        session.FightEnemy(session.CurrentPlanet.SpawnTables.First(), CombatApproach.Blade);
+        session.TravelToPlanet(1);
+        session.FightEnemy(session.CurrentPlanet.SpawnTables.First(), CombatApproach.Bow);
+        session.TravelToPlanet(2);
+        session.FightEnemy(session.CurrentPlanet.SpawnTables.First(), CombatApproach.Sigil);
+        session.FightSectorBoss(CombatApproach.Sigil);
+        session.AdvanceToNextSector();
+        session.Save();
+
+        var loaded = GameSession.Load(_content, _tempSaveRoot, "progress");
+        var progress = loaded.GetVerticalSliceProgress().ToDictionary(x => x.Id);
+
+        Assert.True(progress["mine-anything"].IsComplete);
+        Assert.True(progress["craft-shelter"].IsComplete);
+        Assert.True(progress["build-shelter"].IsComplete);
+        Assert.True(progress["place-workbench"].IsComplete);
+        Assert.True(progress["enemy-families"].IsComplete);
+        Assert.True(progress["boss-kill"].IsComplete);
+        Assert.True(progress["next-sector"].IsComplete);
+        Assert.Contains("crawler", loaded.Player.DefeatedEnemyFamilies);
+        Assert.Contains("flier", loaded.Player.DefeatedEnemyFamilies);
+        Assert.Contains("construct", loaded.Player.DefeatedEnemyFamilies);
     }
 
     private static void MineShelterColumn(GameSession session, int x, int z)

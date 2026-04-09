@@ -77,6 +77,27 @@ public sealed partial class GameSession
             player.BossBonuses.Add(bossBonus);
         }
 
+        foreach (var recipeId in data.CraftedRecipes)
+        {
+            player.CraftedRecipes.Add(recipeId);
+        }
+
+        foreach (var family in data.DefeatedEnemyFamilies)
+        {
+            player.DefeatedEnemyFamilies.Add(family);
+        }
+
+        foreach (var materialId in data.MinedMaterialIds)
+        {
+            player.MinedMaterialIds.Add(materialId);
+        }
+
+        foreach (var placedCount in data.PlacedMaterialCounts)
+        {
+            player.PlacedMaterialCounts[placedCount.Key] = placedCount.Value;
+        }
+
+        player.SectorTransitionsCompleted = data.SectorTransitionsCompleted;
         return player;
     }
 
@@ -95,7 +116,12 @@ public sealed partial class GameSession
             },
             StringComparer.OrdinalIgnoreCase),
         PerkUnlocks = Player.PerkUnlocks.OrderBy(x => x).ToList(),
-        BossBonuses = Player.BossBonuses.OrderBy(x => x).ToList()
+        BossBonuses = Player.BossBonuses.OrderBy(x => x).ToList(),
+        CraftedRecipes = Player.CraftedRecipes.OrderBy(x => x).ToList(),
+        DefeatedEnemyFamilies = Player.DefeatedEnemyFamilies.OrderBy(x => x).ToList(),
+        MinedMaterialIds = Player.MinedMaterialIds.OrderBy(x => x).ToList(),
+        PlacedMaterialCounts = new Dictionary<string, int>(Player.PlacedMaterialCounts, StringComparer.OrdinalIgnoreCase),
+        SectorTransitionsCompleted = Player.SectorTransitionsCompleted
     };
 
     private void PersistCurrentSector()
@@ -165,6 +191,11 @@ public sealed partial class GameSession
         public Dictionary<string, SaveSkillProgressData> SkillLevels { get; set; } = [];
         public List<string> PerkUnlocks { get; set; } = [];
         public List<string> BossBonuses { get; set; } = [];
+        public List<string> CraftedRecipes { get; set; } = [];
+        public List<string> DefeatedEnemyFamilies { get; set; } = [];
+        public List<string> MinedMaterialIds { get; set; } = [];
+        public Dictionary<string, int> PlacedMaterialCounts { get; set; } = [];
+        public int SectorTransitionsCompleted { get; set; }
     }
 
     private sealed class SaveSkillProgressData
