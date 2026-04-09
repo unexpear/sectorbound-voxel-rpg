@@ -9,7 +9,7 @@ internal static class Program
     private static void Main(string[] args)
     {
         var contentRoot = Path.Combine(AppContext.BaseDirectory, "Content");
-        var saveRoot = Path.Combine(AppContext.BaseDirectory, "Saves");
+        var saveRoot = SectorboundUserData.GetSaveRoot();
         var content = ContentLoader.LoadFromDirectory(contentRoot);
 
         var loadExisting = !args.Contains("--new", StringComparer.OrdinalIgnoreCase)
