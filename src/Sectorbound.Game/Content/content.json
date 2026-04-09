@@ -1,0 +1,140 @@
+{
+  "materials": [
+    { "id": "air", "displayName": "Air", "isSolid": false, "dropItemId": "", "dropCount": 0, "hardness": 0, "tier": 0 },
+    { "id": "rootsoil", "displayName": "Rootsoil", "isSolid": true, "dropItemId": "soil-clod", "dropCount": 1, "hardness": 1, "tier": 1 },
+    { "id": "loomstone", "displayName": "Loomstone", "isSolid": true, "dropItemId": "loomstone-fragment", "dropCount": 1, "hardness": 2, "tier": 1 },
+    { "id": "cinderclay", "displayName": "Cinderclay", "isSolid": true, "dropItemId": "cinderclay-clump", "dropCount": 1, "hardness": 2, "tier": 1 },
+    { "id": "emberstone", "displayName": "Emberstone", "isSolid": true, "dropItemId": "emberstone-shard", "dropCount": 1, "hardness": 3, "tier": 2 },
+    { "id": "crystal-silt", "displayName": "Crystal Silt", "isSolid": true, "dropItemId": "crystal-dust", "dropCount": 1, "hardness": 2, "tier": 1 },
+    { "id": "shardstone", "displayName": "Shardstone", "isSolid": true, "dropItemId": "crystal-shard", "dropCount": 1, "hardness": 3, "tier": 2 },
+    { "id": "shelter-block", "displayName": "Shelter Block", "isSolid": true, "dropItemId": "shelter-block", "dropCount": 1, "hardness": 1, "tier": 1 },
+    { "id": "workbench-block", "displayName": "Workbench", "isSolid": true, "dropItemId": "workbench-block", "dropCount": 1, "hardness": 1, "tier": 1 }
+  ],
+  "recipes": [
+    {
+      "id": "workbench-block",
+      "displayName": "Portable Workbench",
+      "inputs": { "timber": 4, "loomstone-fragment": 2 },
+      "outputs": { "workbench-block": 1 },
+      "skillId": "crafting",
+      "skillGain": 38
+    },
+    {
+      "id": "shelter-block",
+      "displayName": "Shelter Blocks",
+      "inputs": { "timber": 2, "loomstone-fragment": 2 },
+      "outputs": { "shelter-block": 4 },
+      "skillId": "crafting",
+      "skillGain": 28
+    },
+    {
+      "id": "rift-sigil-core",
+      "displayName": "Rift Sigil Core",
+      "inputs": { "crystal-shard": 2, "emberstone-shard": 1 },
+      "outputs": { "rift-sigil-core": 1 },
+      "skillId": "crafting",
+      "skillGain": 45
+    }
+  ],
+  "enemies": [
+    {
+      "id": "burrowling",
+      "displayName": "Burrowling",
+      "family": "crawler",
+      "danger": 2,
+      "health": 22,
+      "damage": 5,
+      "loot": { "fiber": 2, "loomstone-fragment": 1 },
+      "skillGain": 26
+    },
+    {
+      "id": "cinderbat",
+      "displayName": "Cinderbat",
+      "family": "flier",
+      "danger": 3,
+      "health": 28,
+      "damage": 7,
+      "loot": { "emberstone-shard": 1, "fiber": 1 },
+      "skillGain": 30
+    },
+    {
+      "id": "shardling",
+      "displayName": "Shardling",
+      "family": "construct",
+      "danger": 4,
+      "health": 34,
+      "damage": 8,
+      "loot": { "crystal-shard": 2 },
+      "skillGain": 34
+    }
+  ],
+  "bosses": [
+    {
+      "id": "void-wyrm",
+      "displayName": "Void Wyrm",
+      "danger": 5,
+      "health": 120,
+      "damage": 14,
+      "rewards": { "sector-core": 1, "crystal-shard": 3 },
+      "bonusXpBySkill": { "combat": 90, "crafting": 40, "mining": 30 },
+      "bonusPerkId": "void-strider"
+    }
+  ],
+  "skills": [
+    { "id": "mining", "displayName": "Mining", "description": "Break terrain and recover crafting resources." },
+    { "id": "combat", "displayName": "Combat", "description": "Master melee, ranged, and boss fighting." },
+    { "id": "crafting", "displayName": "Crafting", "description": "Unlock better tools, stations, and building pieces." },
+    { "id": "arcana", "displayName": "Arcana", "description": "Improve utility abilities and sigil combat." },
+    { "id": "survival", "displayName": "Survival", "description": "Placeholder for later environmental systems." }
+  ],
+  "perks": [
+    { "id": "mason-instinct", "displayName": "Mason's Instinct", "description": "Building actions feel snappier.", "unlockSkillId": "crafting", "requiredLevel": 2 },
+    { "id": "underdeep-step", "displayName": "Underdeep Step", "description": "Mining routes become more efficient.", "unlockSkillId": "mining", "requiredLevel": 2 },
+    { "id": "void-strider", "displayName": "Void Strider", "description": "Boss victory sharpens travel and combat instincts.", "unlockSkillId": null, "requiredLevel": 0 }
+  ],
+  "difficulties": [
+    { "id": "wayfarer", "displayName": "Wayfarer", "inventoryDropPercent": 0.10, "skillPenaltyPercent": 0.00, "corpseRun": false },
+    { "id": "frontier", "displayName": "Frontier", "inventoryDropPercent": 0.35, "skillPenaltyPercent": 0.10, "corpseRun": false },
+    { "id": "hardcore", "displayName": "Hardcore", "inventoryDropPercent": 0.60, "skillPenaltyPercent": 0.20, "corpseRun": true }
+  ],
+  "biomes": [
+    {
+      "id": "sunken-wilds",
+      "displayName": "Sunken Wilds",
+      "surfaceMaterialId": "rootsoil",
+      "subsurfaceMaterialId": "loomstone",
+      "coreMaterialId": "loomstone",
+      "enemyIds": [ "burrowling" ],
+      "structureGenerators": [ "root-arch", "ruined-beacon" ],
+      "heightBias": 1,
+      "caveDensity": 0.18
+    },
+    {
+      "id": "ember-reaches",
+      "displayName": "Ember Reaches",
+      "surfaceMaterialId": "cinderclay",
+      "subsurfaceMaterialId": "emberstone",
+      "coreMaterialId": "emberstone",
+      "enemyIds": [ "cinderbat" ],
+      "structureGenerators": [ "ash-spire", "broken-furnace" ],
+      "heightBias": -1,
+      "caveDensity": 0.22
+    },
+    {
+      "id": "glass-marrow",
+      "displayName": "Glass Marrow",
+      "surfaceMaterialId": "crystal-silt",
+      "subsurfaceMaterialId": "shardstone",
+      "coreMaterialId": "shardstone",
+      "enemyIds": [ "shardling" ],
+      "structureGenerators": [ "crystal-fissure", "buried-obelisk" ],
+      "heightBias": 2,
+      "caveDensity": 0.26
+    }
+  ],
+  "planetArchetypes": [
+    { "id": "wilds-home", "displayName": "Wilds", "biomeId": "sunken-wilds", "enemyFocusId": "burrowling", "bossId": "void-wyrm" },
+    { "id": "ember-forge", "displayName": "Forge", "biomeId": "ember-reaches", "enemyFocusId": "cinderbat", "bossId": "void-wyrm" },
+    { "id": "marrow-depths", "displayName": "Marrow", "biomeId": "glass-marrow", "enemyFocusId": "shardling", "bossId": "void-wyrm" }
+  ]
+}
