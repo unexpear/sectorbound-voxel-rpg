@@ -13,6 +13,8 @@ public sealed class RuntimeForm : Form
     private readonly ContentDefs _content;
     private readonly string _saveRoot;
     private readonly string _savePath;
+    private readonly ClientSettings _settings;
+    private readonly string _settingsPath;
     private readonly InputTracker _input = new();
     private readonly RenderLoop _renderLoop;
     private readonly ChunkMeshCache _meshCache = new();
@@ -54,6 +56,12 @@ public sealed class RuntimeForm : Form
         _content = ContentLoader.LoadFromDirectory(contentRoot);
         _saveRoot = SectorboundUserData.GetSaveRoot();
         _savePath = GameSession.GetSavePath(_saveRoot, SaveSlotId);
+        _settingsPath = ClientSettings.GetDefaultPath();
+        _settings = ClientSettings.Load(_settingsPath);
+        if (!File.Exists(_settingsPath))
+        {
+            _settings.TrySave(_settingsPath);
+        }
         _session = File.Exists(_savePath)
             ? GameSession.Load(_content, _saveRoot, SaveSlotId)
             : GameSession.CreateNew(_content, _saveRoot, SaveSlotId, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
@@ -110,7 +118,7 @@ public sealed class RuntimeForm : Form
         _controlsLabel = new Label
         {
             Dock = DockStyle.Top,
-            Height = 225,
+            Height = 245,
             ForeColor = Color.FromArgb(174, 186, 205),
             Font = new Font("Segoe UI", 9.5f),
             Padding = new Padding(16, 0, 16, 6),
@@ -122,6 +130,7 @@ public sealed class RuntimeForm : Form
                 "Left click / Space: mine targeted block face",
                 "Right click / Enter: place the selected build block",
                 "Mouse wheel or Q / E: zoom camera distance",
+                "I: toggle invert Y look",
                 "1 / 2 / 3: switch planet",
                 "Z / X: cycle build block",
                 "T: cycle recipe",
@@ -187,6 +196,7 @@ public sealed class RuntimeForm : Form
         UpdateStatusText(force: true);
         UpdateTargetLabel();
         Log(File.Exists(_savePath) ? "Loaded existing local save." : "Created new local save.");
+        Log($"Mouse look Y: {DescribeMouseLookMode()}. Press I to toggle.");
 
         _renderLoop = new RenderLoop(TickFrame);
     }
@@ -435,7 +445,7 @@ public sealed class RuntimeForm : Form
             $"Player: ({_player.Position.X:0.0}, {_player.Position.Y:0.0}, {_player.Position.Z:0.0})",
             $"Standing voxel: {standingVoxel}",
             $"Skills: {_session.DescribeSkills()}",
-            $"Approach: {FormatCombatApproach(_selectedCombatApproach)}",
+            $"Approach: {FormatCombatApproach(_selectedCombatApproach)} | Look Y: {DescribeMouseLookMode()}",
             $"Build: {DescribeSelectedBuild()}",
             $"Recipe: {GetSelectedRecipe().DisplayName}",
             $"Slice goals: {sliceProgress.Count(x => x.IsComplete)}/{sliceProgress.Count}",
@@ -456,7 +466,8 @@ public sealed class RuntimeForm : Form
             var dx = e.Location.X - last.X;
             var dy = e.Location.Y - last.Y;
             float sensitivity = 0.012f;
-            _camera.AdjustYawPitch(dx * sensitivity, -dy * sensitivity);
+            var pitchDelta = _settings.InvertMouseY ? dy * sensitivity : -dy * sensitivity;
+            _camera.AdjustYawPitch(dx * sensitivity, pitchDelta);
         }
         _lastMousePosition = e.Location;
     }
@@ -528,6 +539,9 @@ public sealed class RuntimeForm : Form
                 break;
             case Keys.F:
                 FightCurrentEnemy();
+                break;
+            case Keys.I:
+                ToggleInvertMouseY();
                 break;
             case Keys.B:
                 FightSectorBoss();
@@ -660,7 +674,7 @@ public sealed class RuntimeForm : Form
             $"Player voxel: {standingVoxel}",
             $"Player world: ({_player.Position.X:0.00}, {_player.Position.Y:0.00}, {_player.Position.Z:0.00})",
             $"Camera: ({_camera.Position.X:0.0}, {_camera.Position.Y:0.0}, {_camera.Position.Z:0.0})",
-            $"Difficulty: {_session.CurrentDifficulty.DisplayName}",
+            $"Difficulty: {_session.CurrentDifficulty.DisplayName} | Look Y: {DescribeMouseLookMode()}",
             string.Empty,
             "Planets",
             planets,
@@ -766,6 +780,16 @@ public sealed class RuntimeForm : Form
         UpdateStatusText(force: true);
     }
 
+    private void ToggleInvertMouseY()
+    {
+        _settings.InvertMouseY = !_settings.InvertMouseY;
+        var saved = _settings.TrySave(_settingsPath);
+        Log(saved
+            ? $"Mouse look Y set to {DescribeMouseLookMode()}."
+            : $"Mouse look Y set to {DescribeMouseLookMode()}, but the preference could not be saved.");
+        UpdateStatusText(force: true);
+    }
+
     private void CraftSelectedRecipe()
     {
         var recipe = GetSelectedRecipe();
@@ -792,6 +816,8 @@ public sealed class RuntimeForm : Form
         Log(_session.FightSectorBoss(_selectedCombatApproach).Message);
         UpdateStatusText(force: true);
     }
+
+    private string DescribeMouseLookMode() => _settings.InvertMouseY ? "inverted" : "standard";
 
     private string DescribeSelectedBuild()
     {

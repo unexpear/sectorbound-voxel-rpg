@@ -9,6 +9,14 @@ This workspace contains a C# prototype for the Sectorbound plan: a deterministic
 - `src/Sectorbound.Client`: Windows Forms runtime client with a low-level UI-thread render loop, cached chunk-face meshing, grounded movement, in-world face picking, and world interaction over the same engine and shared save data.
 - `tests/Sectorbound.Engine.Tests`: automated verification for saves, progression, sector travel, building freedom, and difficulty penalties.
 
+## Workspace Boundaries
+
+The live project is the `Sectorbound.sln` solution plus `src/`, `tests/`, `scripts/`, `docs/`, and `artifacts/`.
+
+`game makeing/` is currently tracked as reference/archive material, but no project file or build script points at it. Treat it as a manual asset source until something is explicitly imported into the live project.
+
+For a quicker orientation pass, see `docs/workspace-map.md` and `docs/gameplay-loop.md`.
+
 ## Run It
 
 ```powershell
@@ -53,6 +61,7 @@ Shelter Blocks and Rift Sigil Core now require a placed `workbench-block` on the
 - `Left click` or `Space`: mine the targeted block face
 - `Right click` or `Enter`: place the selected build block against the targeted face
 - `Mouse wheel` or `Q / E`: zoom the chase camera
+- `I`: toggle invert Y look and persist the preference locally
 - `Shift`: sprint
 - `1 / 2 / 3`: switch planets
 - `Z / X`: cycle the selected build block
