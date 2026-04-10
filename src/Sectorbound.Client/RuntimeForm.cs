@@ -47,7 +47,6 @@ public sealed class RuntimeForm : Form
     private int _selectedRecipeIndex;
     private CombatApproach _selectedCombatApproach = CombatApproach.Blade;
     private Point? _lastMousePosition = null;
-    private bool _isDraggingCamera = false;
 
     public RuntimeForm()
     {
@@ -117,12 +116,11 @@ public sealed class RuntimeForm : Form
             Padding = new Padding(16, 0, 16, 6),
             Text = string.Join(Environment.NewLine, [
                 "Controls",
-                "WASD / Arrow Keys: move on the terrain",
+                "WASD / Arrow Keys: move relative to camera",
                 "Shift: sprint",
-                "Mouse move: target visible voxel faces",
+                "Mouse move: steer third-person camera",
                 "Left click / Space: mine targeted block face",
                 "Right click / Enter: place the selected build block",
-                "Middle mouse drag: orbit camera",
                 "Mouse wheel or Q / E: zoom camera distance",
                 "1 / 2 / 3: switch planet",
                 "Z / X: cycle build block",
@@ -171,7 +169,6 @@ public sealed class RuntimeForm : Form
         _viewport.MouseLeave += (_, _) =>
         {
             _mouseInsideViewport = false;
-            _isDraggingCamera = false;
             _lastMousePosition = null;
             UpdateTargetLabel();
         };
@@ -247,9 +244,16 @@ public sealed class RuntimeForm : Form
         }
 
         var moveAxis = _input.ReadMovement();
+        var facingAxis = _input.ReadFacingMovement();
         var worldMove = (-moveAxis.Y * _camera.ForwardOnGround) + (moveAxis.X * _camera.RightOnGround);
-        var jumpPressed = _input.IsJumpPressed();
-        _player.Update(_session, worldMove, _input.IsDown(Keys.ShiftKey), jumpPressed, deltaSeconds);
+        _player.Update(
+            _session,
+            worldMove,
+            facingAxis,
+            _camera.ForwardOnGround,
+            _camera.RightOnGround,
+            _input.IsDown(Keys.ShiftKey),
+            deltaSeconds);
 
         var viewportSize = _backBufferSize.Width > 0 ? _backBufferSize : _viewport.ClientSize;
         _camera.Update(_player.Position, viewportSize, deltaSeconds);
@@ -447,11 +451,10 @@ public sealed class RuntimeForm : Form
     {
         _mouseInsideViewport = true;
         _mouseViewportPosition = e.Location;
-        if (_isDraggingCamera && _lastMousePosition is Point last)
+        if (_lastMousePosition is Point last)
         {
             var dx = e.Location.X - last.X;
             var dy = e.Location.Y - last.Y;
-            // Sensitivity: adjust as needed
             float sensitivity = 0.012f;
             _camera.AdjustYawPitch(dx * sensitivity, -dy * sensitivity);
         }
@@ -466,27 +469,13 @@ public sealed class RuntimeForm : Form
         {
             MineTargetFace();
         }
-        else if (e.Button == MouseButtons.Middle)
-        {
-            _isDraggingCamera = true;
-            _lastMousePosition = e.Location;
-            _viewport.Capture = true;
-        }
         else if (e.Button == MouseButtons.Right)
         {
             PlaceOnTargetFace();
         }
     }
 
-    private void OnViewportMouseUp(object? sender, MouseEventArgs e)
-    {
-        if (e.Button == MouseButtons.Middle)
-        {
-            _isDraggingCamera = false;
-            _lastMousePosition = null;
-            _viewport.Capture = false;
-        }
-    }
+    private void OnViewportMouseUp(object? sender, MouseEventArgs e) { }
 
 
     private void OnViewportMouseWheel(object? sender, MouseEventArgs e)
