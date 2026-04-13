@@ -5,10 +5,19 @@ public sealed partial class GameSession
     public int MinWorldY => WorldFloor;
     public int MaxWorldY => WorldCeiling;
     public int ChunkSizeInVoxels => ChunkSize;
+    public float ChunkSizeInOriginalBlocks => ChunkSize / (float)GameplayVoxelsPerOriginalBlock;
+    public int VoxelsPerOriginalBlock => GameplayVoxelsPerOriginalBlock;
+    public float VoxelRenderScale => 1.0f / GameplayVoxelsPerOriginalBlock;
 
     public IReadOnlyList<PlanetSummary> GetPlanetSummaries() =>
         Sector.LoadedPlanets
-            .Select(x => new PlanetSummary(x.PlanetIndex, x.DisplayName, x.BiomeRules.DisplayName, x.SpawnTables, x.StructureGenerators))
+            .Select(x => new PlanetSummary(
+                x.PlanetIndex,
+                x.DisplayName,
+                x.BiomeRules.DisplayName,
+                x.SpawnTables,
+                x.StructureGenerators,
+                x.BiomeFeatureGenerators))
             .ToArray();
 
     public string GetMaterialIdAtCurrentPlanet(Int3 worldPosition) => ResolveMaterial(CurrentPlanet, worldPosition);
@@ -20,6 +29,21 @@ public sealed partial class GameSession
     public ChunkCoordinate GetChunkCoordinateForWorldPosition(Int3 worldPosition) => ToChunkCoordinate(worldPosition);
 
     public int GetSurfaceHeight(int x, int z) => CalculateSurfaceHeight(CurrentPlanet, x, z);
+
+    public BiomeFeatureSite? GetBiomeFeatureSiteAtCurrentPlanet(int x, int z) =>
+        ResolveBiomeFeaturePlacement(CurrentPlanet, x, z);
+
+    public string? GetBiomeFeatureIdAtCurrentPlanet(int x, int z) => ResolveBiomeFeaturePlacement(CurrentPlanet, x, z)?.FeatureId;
+
+    public IReadOnlyList<ScenicPropInstance> GetScenicPropsForCurrentPlanet(int chunkX, int chunkZ) =>
+        ResolveScenicPropsForChunk(CurrentPlanet, chunkX, chunkZ);
+
+    public IReadOnlyList<WorldGenSlice> GenerateCurrentPlanetSlices(
+        Int3 origin,
+        int sliceCount,
+        int sliceHeightVoxels,
+        int sliceDepthVoxels) =>
+        GenerateSlicesAlongX(CurrentPlanet, origin, sliceCount, sliceHeightVoxels, sliceDepthVoxels);
 
     public Int3 GetSurfaceVoxel(int x, int z)
     {
