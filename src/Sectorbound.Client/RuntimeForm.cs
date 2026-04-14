@@ -4,11 +4,13 @@ using Sectorbound.Engine;
 
 namespace Sectorbound.Client;
 
-public sealed class RuntimeForm : Form
+public sealed partial class RuntimeForm : Form
 {
     private const string SaveSlotId = "sectorbound";
     private const int SidebarWidth = 360;
-    private const int VisibleChunkRadius = 1;
+
+    private int VisibleChunkRadius =>
+        (int)Math.Ceiling(_settings.ViewDistanceBlocks / _session.ChunkSizeInOriginalBlocks);
 
     private readonly ContentDefs _content;
     private readonly string _saveRoot;
@@ -30,6 +32,7 @@ public sealed class RuntimeForm : Form
     private readonly Font _overlayFont = new("Consolas", 10f, FontStyle.Regular, GraphicsUnit.Point);
     private readonly Font _overlayTitleFont = new("Segoe UI Semibold", 16f, FontStyle.Regular, GraphicsUnit.Point);
     private readonly List<ProjectedFace> _projectedFaces = [];
+    private readonly List<RuntimeParticle> _particles = [];
     private readonly IReadOnlyList<string> _buildPalette;
     private readonly IReadOnlyList<string> _recipePalette;
 
@@ -49,8 +52,22 @@ public sealed class RuntimeForm : Form
     private int _selectedRecipeIndex;
     private CombatApproach _selectedCombatApproach = CombatApproach.Blade;
     private Point? _lastMousePosition = null;
+    private List<ChunkColumnKey> _prewarmQueue = [];
+    private int _prewarmIndex;
+    private bool _isPrewarming;
+    private bool _isBuildingPrewarmChunk;
+    private ChunkColumnKey? _prewarmActiveChunk;
+    private int _prewarmActiveChunkIndex = -1;
+    private int _prewarmActiveSliceBatchIndex;
+    private int _prewarmActiveSliceBatchTotal;
+    private bool _wasPlayerInLiquid;
+    private bool _wasPlayerSubmerged;
+    private string _lastPlayerMediumId = "air";
+    private float _liquidWakeAccumulator;
+    private const int PrewarmChunksPerFrame = 4;
+    private const int MaxParticles = 320;
 
-    public RuntimeForm()
+    public RuntimeForm(bool newGame = false, string? newGameDifficultyPresetId = null)
     {
         var contentRoot = Path.Combine(AppContext.BaseDirectory, "Content");
         _content = ContentLoader.LoadFromDirectory(contentRoot);
@@ -62,9 +79,16 @@ public sealed class RuntimeForm : Form
         {
             _settings.TrySave(_settingsPath);
         }
-        _session = File.Exists(_savePath)
+        bool loadSave = !newGame && File.Exists(_savePath);
+        var difficultyPresetId = ClientSettings.NormalizeDifficultyPresetId(newGameDifficultyPresetId);
+        _session = loadSave
             ? GameSession.Load(_content, _saveRoot, SaveSlotId)
-            : GameSession.CreateNew(_content, _saveRoot, SaveSlotId, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+            : GameSession.CreateNew(
+                _content,
+                _saveRoot,
+                SaveSlotId,
+                DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+                difficultyPresetId);
         _buildPalette = BuildPlaceablePalette();
         _recipePalette = _content.Recipes.Values
             .OrderBy(x => x.DisplayName, StringComparer.OrdinalIgnoreCase)
@@ -193,9 +217,10 @@ public sealed class RuntimeForm : Form
         KeyUp += OnRuntimeKeyUp;
 
         RespawnPlayer();
+        StartPrewarm();
         UpdateStatusText(force: true);
         UpdateTargetLabel();
-        Log(File.Exists(_savePath) ? "Loaded existing local save." : "Created new local save.");
+        Log(loadSave ? "Loaded existing local save." : "Created new local save.");
         Log($"Mouse look Y: {DescribeMouseLookMode()}. Press I to toggle.");
 
         _renderLoop = new RenderLoop(TickFrame);
@@ -219,6 +244,12 @@ public sealed class RuntimeForm : Form
 
     private void TickFrame(TimeSpan delta)
     {
+        if (_isPrewarming)
+        {
+            TickPrewarm();
+            return;
+        }
+
         var deltaSeconds = Math.Max(0.001f, (float)delta.TotalSeconds);
         _runtimeTime += deltaSeconds;
         _fpsAccumulator += deltaSeconds;
@@ -256,6 +287,7 @@ public sealed class RuntimeForm : Form
         var moveAxis = _input.ReadMovement();
         var facingAxis = _input.ReadFacingMovement();
         var worldMove = (-moveAxis.Y * _camera.ForwardOnGround) + (moveAxis.X * _camera.RightOnGround);
+        var previousPlayerWorldPosition = _player.Position * _session.VoxelRenderScale;
         _player.Update(
             _session,
             worldMove,
@@ -264,9 +296,11 @@ public sealed class RuntimeForm : Form
             _camera.RightOnGround,
             _input.IsDown(Keys.ShiftKey),
             deltaSeconds);
+        UpdatePlayerEffects(previousPlayerWorldPosition, deltaSeconds);
+        UpdateParticles(deltaSeconds);
 
         var viewportSize = _backBufferSize.Width > 0 ? _backBufferSize : _viewport.ClientSize;
-        _camera.Update(_player.Position, viewportSize, deltaSeconds);
+        _camera.Update(_player.Position * _session.VoxelRenderScale, viewportSize, deltaSeconds);
     }
 
     private void RenderFrame()
@@ -285,6 +319,7 @@ public sealed class RuntimeForm : Form
         DrawSky(graphics);
         BuildProjectedFaces();
         DrawProjectedFaces(graphics);
+        DrawParticles(graphics);
         DrawTargetHighlight(graphics);
         if (_showOverlay)
         {
@@ -391,6 +426,202 @@ public sealed class RuntimeForm : Form
         }
     }
 
+    private void UpdatePlayerEffects(Vector3 previousPlayerWorldPosition, float deltaSeconds)
+    {
+        var currentPlayerWorldPosition = _player.Position * _session.VoxelRenderScale;
+        if (!_wasPlayerInLiquid && _player.IsInLiquid)
+        {
+            SpawnLiquidBurst(currentPlayerWorldPosition + new Vector3(0f, 0.08f, 0f), _player.CurrentMediumId, 1f + _player.LiquidImmersion);
+        }
+        else if (_wasPlayerInLiquid && !_player.IsInLiquid)
+        {
+            SpawnLiquidBurst(currentPlayerWorldPosition + new Vector3(0f, 0.06f, 0f), _lastPlayerMediumId, 0.8f);
+        }
+
+        var horizontalDistance = new Vector2(
+            currentPlayerWorldPosition.X - previousPlayerWorldPosition.X,
+            currentPlayerWorldPosition.Z - previousPlayerWorldPosition.Z).Length();
+        if (_player.IsInLiquid)
+        {
+            _liquidWakeAccumulator += horizontalDistance * (0.35f + (_player.LiquidImmersion * 0.8f));
+            if (_liquidWakeAccumulator >= 0.10f)
+            {
+                SpawnLiquidWake(currentPlayerWorldPosition, _player.CurrentMediumId, _player.LiquidImmersion);
+                _liquidWakeAccumulator = 0f;
+            }
+
+            if (_player.IsSubmerged && !_wasPlayerSubmerged)
+            {
+                SpawnBubbleTrail(currentPlayerWorldPosition, _player.CurrentMediumId, 4);
+            }
+        }
+        else
+        {
+            _liquidWakeAccumulator = 0f;
+        }
+
+        _wasPlayerInLiquid = _player.IsInLiquid;
+        _wasPlayerSubmerged = _player.IsSubmerged;
+        _lastPlayerMediumId = _player.CurrentMediumId;
+    }
+
+    private void UpdateParticles(float deltaSeconds)
+    {
+        for (var index = _particles.Count - 1; index >= 0; index--)
+        {
+            var particle = _particles[index];
+            particle.Age += deltaSeconds;
+            if (particle.Age >= particle.Lifetime)
+            {
+                _particles.RemoveAt(index);
+                continue;
+            }
+
+            particle.Velocity.Y -= particle.Gravity * deltaSeconds;
+            var drag = Math.Clamp(1f - (particle.Drag * deltaSeconds), 0.15f, 1f);
+            particle.Velocity *= drag;
+            particle.Position += particle.Velocity * deltaSeconds;
+
+            var particleVoxel = ToVoxelPosition(particle.Position);
+            var material = _session.InspectMaterialAtCurrentPlanet(particleVoxel);
+            if (material.IsSolid)
+            {
+                _particles.RemoveAt(index);
+                continue;
+            }
+
+            if (IsLiquidMaterial(material))
+            {
+                particle.Velocity *= 0.88f;
+            }
+
+            _particles[index] = particle;
+        }
+    }
+
+    private void DrawParticles(Graphics graphics)
+    {
+        if (_particles.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var particle in _particles.OrderByDescending(x => Vector3.DistanceSquared(x.Position, _camera.Position)))
+        {
+            if (!TryProject(particle.Position, out var screen))
+            {
+                continue;
+            }
+
+            var lifeT = particle.Age / particle.Lifetime;
+            var fade = MathF.Sin((1f - lifeT) * MathF.PI * 0.5f);
+            var depth = MathF.Sqrt(Vector3.DistanceSquared(particle.Position, _camera.Position));
+            var radius = Math.Clamp((particle.Size / MathF.Max(0.35f, depth)) * 105f, 1.5f, 16f);
+            var color = Color.FromArgb(
+                Math.Clamp((int)(particle.Color.A * fade), 0, 255),
+                particle.Color.R,
+                particle.Color.G,
+                particle.Color.B);
+            using var brush = new SolidBrush(color);
+            graphics.FillEllipse(brush, screen.X - radius, screen.Y - radius, radius * 2f, radius * 2f);
+
+            using var highlightBrush = new SolidBrush(Color.FromArgb(Math.Clamp(color.A / 2, 0, 255), 255, 255, 255));
+            graphics.FillEllipse(highlightBrush, screen.X - (radius * 0.35f), screen.Y - (radius * 0.35f), radius * 0.7f, radius * 0.7f);
+        }
+    }
+
+    private void SpawnLiquidBurst(Vector3 worldPosition, string materialId, float intensity)
+    {
+        var color = GetParticleColor(materialId);
+        var count = 6 + (int)MathF.Round(intensity * 4f);
+        for (var index = 0; index < count; index++)
+        {
+            var angle = Random.Shared.NextSingle() * MathF.PI * 2f;
+            var speed = 0.35f + (Random.Shared.NextSingle() * 0.45f * intensity);
+            AddParticle(
+                worldPosition + new Vector3((Random.Shared.NextSingle() - 0.5f) * 0.18f, 0f, (Random.Shared.NextSingle() - 0.5f) * 0.18f),
+                new Vector3(MathF.Cos(angle) * speed, 0.35f + (Random.Shared.NextSingle() * 0.4f * intensity), MathF.Sin(angle) * speed),
+                color,
+                size: 0.06f + (Random.Shared.NextSingle() * 0.03f),
+                lifetime: 0.45f + (Random.Shared.NextSingle() * 0.20f),
+                drag: 1.6f,
+                gravity: 1.8f);
+        }
+    }
+
+    private void SpawnLiquidWake(Vector3 worldPosition, string materialId, float immersion)
+    {
+        var color = GetParticleColor(materialId);
+        var count = immersion >= 0.66f ? 3 : 2;
+        for (var index = 0; index < count; index++)
+        {
+            var angle = Random.Shared.NextSingle() * MathF.PI * 2f;
+            var speed = 0.08f + (Random.Shared.NextSingle() * 0.12f);
+            AddParticle(
+                worldPosition + new Vector3((Random.Shared.NextSingle() - 0.5f) * 0.22f, 0.02f, (Random.Shared.NextSingle() - 0.5f) * 0.22f),
+                new Vector3(MathF.Cos(angle) * speed, 0.06f + (Random.Shared.NextSingle() * 0.08f), MathF.Sin(angle) * speed),
+                color,
+                size: 0.05f + (Random.Shared.NextSingle() * 0.02f),
+                lifetime: 0.28f + (Random.Shared.NextSingle() * 0.18f),
+                drag: 2.8f,
+                gravity: 0.9f);
+        }
+    }
+
+    private void SpawnBubbleTrail(Vector3 worldPosition, string materialId, int count)
+    {
+        var color = Lighten(GetParticleColor(materialId), 0.30f);
+        for (var index = 0; index < count; index++)
+        {
+            AddParticle(
+                worldPosition + new Vector3((Random.Shared.NextSingle() - 0.5f) * 0.14f, -0.12f + (index * 0.03f), (Random.Shared.NextSingle() - 0.5f) * 0.14f),
+                new Vector3((Random.Shared.NextSingle() - 0.5f) * 0.04f, 0.10f + (Random.Shared.NextSingle() * 0.10f), (Random.Shared.NextSingle() - 0.5f) * 0.04f),
+                color,
+                size: 0.035f + (Random.Shared.NextSingle() * 0.015f),
+                lifetime: 0.55f + (Random.Shared.NextSingle() * 0.18f),
+                drag: 1.3f,
+                gravity: -0.18f);
+        }
+    }
+
+    private void SpawnDebrisBurst(Vector3 worldPosition, Int3 normal, string materialId, int count, float speedScale)
+    {
+        var baseColor = GetParticleColor(materialId);
+        var outwardVector = new Vector3(normal.X, normal.Y, normal.Z);
+        if (outwardVector.LengthSquared() < 0.001f)
+        {
+            outwardVector = Vector3.UnitY;
+        }
+
+        var outward = Vector3.Normalize(outwardVector + new Vector3(0f, 0.5f, 0f));
+        for (var index = 0; index < count; index++)
+        {
+            var jitter = new Vector3(
+                (Random.Shared.NextSingle() - 0.5f) * 0.55f,
+                Random.Shared.NextSingle() * 0.55f,
+                (Random.Shared.NextSingle() - 0.5f) * 0.55f);
+            var velocity = (outward * (0.25f + (Random.Shared.NextSingle() * 0.30f * speedScale))) + (jitter * 0.25f);
+            AddParticle(
+                worldPosition + new Vector3(normal.X, normal.Y, normal.Z) * 0.04f,
+                velocity,
+                Shift(baseColor, Random.Shared.Next(-10, 11), Random.Shared.Next(-10, 11), Random.Shared.Next(-10, 11)),
+                size: 0.04f + (Random.Shared.NextSingle() * 0.02f),
+                lifetime: 0.28f + (Random.Shared.NextSingle() * 0.16f),
+                drag: 2.1f,
+                gravity: 2.2f);
+        }
+    }
+
+    private void AddParticle(Vector3 position, Vector3 velocity, Color color, float size, float lifetime, float drag, float gravity)
+    {
+        if (_particles.Count >= MaxParticles)
+        {
+            _particles.RemoveAt(0);
+        }
+
+        _particles.Add(new RuntimeParticle(position, velocity, color, size, lifetime, drag, gravity));
+    }
+
     private void DrawTargetHighlight(Graphics graphics)
     {
         if (_targetedFace is null)
@@ -443,6 +674,7 @@ public sealed class RuntimeForm : Form
             $"Difficulty: {_session.CurrentDifficulty.DisplayName}",
             $"Workbench: {DescribeWorkbenchStatus()}",
             $"Player: ({_player.Position.X:0.0}, {_player.Position.Y:0.0}, {_player.Position.Z:0.0})",
+            $"Medium: {DescribeCurrentMedium()}",
             $"Standing voxel: {standingVoxel}",
             $"Skills: {_session.DescribeSkills()}",
             $"Approach: {FormatCombatApproach(_selectedCombatApproach)} | Look Y: {DescribeMouseLookMode()}",
@@ -455,172 +687,6 @@ public sealed class RuntimeForm : Form
 
         using var textBrush = new SolidBrush(Color.FromArgb(220, 228, 236));
         graphics.DrawString(overlayLines, _overlayFont, textBrush, new RectangleF(28, 58, 336, 148));
-    }
-
-    private void OnViewportMouseMove(object? sender, MouseEventArgs e)
-    {
-        _mouseInsideViewport = true;
-        _mouseViewportPosition = e.Location;
-        if (_lastMousePosition is Point last)
-        {
-            var dx = e.Location.X - last.X;
-            var dy = e.Location.Y - last.Y;
-            float sensitivity = 0.012f;
-            var pitchDelta = _settings.InvertMouseY ? dy * sensitivity : -dy * sensitivity;
-            _camera.AdjustYawPitch(dx * sensitivity, pitchDelta);
-        }
-        _lastMousePosition = e.Location;
-    }
-
-    private void OnViewportMouseDown(object? sender, MouseEventArgs e)
-    {
-        Focus();
-        _viewport.Focus();
-        if (e.Button == MouseButtons.Left)
-        {
-            MineTargetFace();
-        }
-        else if (e.Button == MouseButtons.Right)
-        {
-            PlaceOnTargetFace();
-        }
-    }
-
-    private void OnViewportMouseUp(object? sender, MouseEventArgs e) { }
-
-
-    private void OnViewportMouseWheel(object? sender, MouseEventArgs e)
-    {
-        _camera.AdjustDistance(Math.Sign(-e.Delta) * 1.5f);
-    }
-
-    private void OnRuntimeKeyDown(object? sender, KeyEventArgs e)
-    {
-        var isNewPress = _input.SetKeyDown(e.KeyCode);
-        if (!isNewPress)
-        {
-            return;
-        }
-
-        switch (e.KeyCode)
-        {
-            case Keys.D1:
-            case Keys.NumPad1:
-                SwitchPlanet(0);
-                break;
-            case Keys.D2:
-            case Keys.NumPad2:
-                SwitchPlanet(1);
-                break;
-            case Keys.D3:
-            case Keys.NumPad3:
-                SwitchPlanet(2);
-                break;
-            case Keys.Space:
-                MineTargetFace();
-                break;
-            case Keys.Enter:
-                PlaceOnTargetFace();
-                break;
-            case Keys.Z:
-                CycleBuildSelection(-1);
-                break;
-            case Keys.X:
-                CycleBuildSelection(1);
-                break;
-            case Keys.T:
-                CycleRecipeSelection(1);
-                break;
-            case Keys.R:
-                CraftSelectedRecipe();
-                break;
-            case Keys.C:
-                CycleCombatApproach();
-                break;
-            case Keys.F:
-                FightCurrentEnemy();
-                break;
-            case Keys.I:
-                ToggleInvertMouseY();
-                break;
-            case Keys.B:
-                FightSectorBoss();
-                break;
-            case Keys.N:
-                Log(_session.AdvanceToNextSector().Message);
-                ResetRuntimeState();
-                break;
-            case Keys.S:
-                _session.Save();
-                Log($"Saved to {_savePath}");
-                break;
-            case Keys.L:
-                _session = GameSession.Load(_content, _saveRoot, SaveSlotId);
-                ResetRuntimeState();
-                Log("Reloaded local save.");
-                break;
-            case Keys.Tab:
-                _showOverlay = !_showOverlay;
-                Log(_showOverlay ? "Overlay enabled." : "Overlay hidden.");
-                break;
-            default:
-                return;
-        }
-
-        UpdateStatusText(force: true);
-        e.Handled = true;
-        e.SuppressKeyPress = true;
-    }
-
-    private void OnRuntimeKeyUp(object? sender, KeyEventArgs e) => _input.SetKeyUp(e.KeyCode);
-
-    private void MineTargetFace()
-    {
-        if (_targetedFace is null)
-        {
-            return;
-        }
-
-        var affected = _targetedFace.Face.BlockPosition;
-        Log(_session.Mine(affected).Message);
-        _meshCache.InvalidateAround(_session, affected);
-        UpdateStatusText(force: true);
-    }
-
-    private void PlaceOnTargetFace()
-    {
-        if (_targetedFace is null)
-        {
-            return;
-        }
-
-        var normal = _targetedFace.Face.Normal;
-        var target = _targetedFace.Face.BlockPosition;
-        var placement = new Int3(target.X + normal.X, target.Y + normal.Y, target.Z + normal.Z);
-        Log(_session.PlaceBlock(placement, GetSelectedBuildMaterialId()).Message);
-        _meshCache.InvalidateAround(_session, placement);
-        UpdateStatusText(force: true);
-    }
-
-    private void SwitchPlanet(int planetIndex)
-    {
-        _session.TravelToPlanet(planetIndex);
-        ResetRuntimeState();
-        Log($"Travelled to {_session.CurrentPlanet.DisplayName}.");
-    }
-
-    private void ResetRuntimeState()
-    {
-        _meshCache.Clear();
-        RespawnPlayer();
-        UpdateStatusText(force: true);
-        UpdateTargetLabel();
-    }
-
-    private void RespawnPlayer()
-    {
-        _player.Spawn(_session, new Vector2(0.5f, 0.5f));
-        _camera.Update(_player.Position, _viewport.ClientSize, 1f / 60f);
     }
 
     private ProjectedFace? PickTargetedFace()
@@ -844,6 +910,11 @@ public sealed class RuntimeForm : Form
     private string DescribeWorkbenchStatus() =>
         _session.CurrentPlanetHasPlacedBlock("workbench-block") ? "ready" : "missing";
 
+    private string DescribeCurrentMedium() =>
+        _player.IsInLiquid
+            ? $"{_player.CurrentMediumId} ({_player.LiquidImmersion * 100f:0}% immersed)"
+            : "air";
+
     private static string FormatCombatApproach(CombatApproach approach) =>
         approach switch
         {
@@ -855,10 +926,31 @@ public sealed class RuntimeForm : Form
 
     private IEnumerable<MeshFace> BuildPlayerFaces()
     {
-        foreach (var face in GeneratedVoxelAssets.BuildPlayerFaces(_player.Position, _player.FacingDirection))
+        var selection = _settings.GetCharacterSelection();
+        foreach (var face in GeneratedVoxelAssets.BuildPlayerFaces(selection, _player.Position * _session.VoxelRenderScale, _player.FacingDirection))
         {
             yield return face;
         }
+    }
+
+    private Vector3 GetVoxelCenter(Int3 blockPosition)
+    {
+        var scale = _session.VoxelRenderScale;
+        return new Vector3(
+            (blockPosition.X + 0.5f) * scale,
+            (blockPosition.Y + 0.5f) * scale,
+            (blockPosition.Z + 0.5f) * scale);
+    }
+
+    private static Vector3 GetFaceCenter(MeshFace face) => (face.A + face.B + face.C + face.D) / 4f;
+
+    private Int3 ToVoxelPosition(Vector3 worldPosition)
+    {
+        var scale = _session.VoxelRenderScale;
+        return new Int3(
+            (int)MathF.Floor(worldPosition.X / scale),
+            (int)MathF.Floor(worldPosition.Y / scale),
+            (int)MathF.Floor(worldPosition.Z / scale));
     }
 
     private static RectangleF GetBounds(PointF[] points)
@@ -888,13 +980,15 @@ public sealed class RuntimeForm : Form
         brightness = Math.Clamp(brightness, 0.15f, 1.15f);
         return Multiply(projected.BaseColor, brightness);
     }
-
     private static Color Multiply(Color color, float brightness) =>
         Color.FromArgb(
             color.A,
             Math.Clamp((int)(color.R * brightness), 0, 255),
             Math.Clamp((int)(color.G * brightness), 0, 255),
             Math.Clamp((int)(color.B * brightness), 0, 255));
+
+    private static bool IsLiquidMaterial(MaterialDef material) =>
+        !material.IsSolid && !string.Equals(material.Id, "air", StringComparison.OrdinalIgnoreCase);
 
     private static Color Darken(Color color, float amount) =>
         Color.FromArgb(
@@ -905,6 +999,11 @@ public sealed class RuntimeForm : Form
 
     private static Color GetMaterialColor(MeshFace face)
     {
+        if (face.OverrideColor is Color overrideColor)
+        {
+            return overrideColor;
+        }
+
         if (!string.IsNullOrWhiteSpace(face.PaletteId))
         {
             return GetPaletteColor(face);
@@ -913,6 +1012,7 @@ public sealed class RuntimeForm : Form
         return face.MaterialId switch
         {
             "air" => Color.FromArgb(12, 16, 24),
+            "water" => GetWaterColor(face),
             "rootsoil" => GetTerrainColor(
                 face,
                 top: Color.FromArgb(120, 111, 73),
@@ -955,10 +1055,55 @@ public sealed class RuntimeForm : Form
                 side: Color.FromArgb(204, 176, 128),
                 accent: Color.FromArgb(241, 225, 187),
                 variationStrength: 8),
+            "ember-vein" => GetTerrainColor(
+                face,
+                top: Color.FromArgb(255, 128, 42),
+                side: Color.FromArgb(220, 92, 24),
+                accent: Color.FromArgb(255, 178, 88),
+                variationStrength: 18),
+            "rootwood" => GetTerrainColor(
+                face,
+                top: Color.FromArgb(72, 52, 36),
+                side: Color.FromArgb(56, 40, 28),
+                accent: Color.FromArgb(98, 72, 48),
+                variationStrength: 7),
+            "void-crystal" => GetTerrainColor(
+                face,
+                top: Color.FromArgb(118, 74, 194),
+                side: Color.FromArgb(88, 52, 162),
+                accent: Color.FromArgb(172, 132, 238),
+                variationStrength: 16),
             "workbench-block" => Color.FromArgb(145, 105, 72),
             _ => Color.Magenta
         };
     }
+
+    private static Color GetWaterColor(MeshFace face)
+    {
+        var baseColor = face.Normal.Y > 0
+            ? Color.FromArgb(168, 78, 148, 214)
+            : Color.FromArgb(148, 52, 112, 176);
+        var noise = SampleColorNoise(face.BlockPosition, 6);
+        return Shift(baseColor, noise / 3, noise / 4, noise);
+    }
+
+    private static Color GetParticleColor(string materialId) =>
+        materialId switch
+        {
+            "water" => Color.FromArgb(192, 122, 186, 238),
+            "rootsoil" => Color.FromArgb(198, 126, 114, 82),
+            "loomstone" => Color.FromArgb(206, 152, 163, 176),
+            "cinderclay" => Color.FromArgb(212, 199, 120, 88),
+            "emberstone" => Color.FromArgb(220, 242, 156, 88),
+            "crystal-silt" => Color.FromArgb(210, 148, 188, 216),
+            "shardstone" => Color.FromArgb(216, 206, 236, 248),
+            "ember-vein" => Color.FromArgb(228, 255, 148, 52),
+            "rootwood" => Color.FromArgb(205, 88, 68, 48),
+            "void-crystal" => Color.FromArgb(224, 146, 106, 220),
+            "shelter-block" => Color.FromArgb(208, 222, 198, 150),
+            "workbench-block" => Color.FromArgb(205, 168, 126, 86),
+            _ => Color.FromArgb(200, 230, 230, 230)
+        };
 
     private static Color GetTerrainColor(
         MeshFace face,
@@ -1023,6 +1168,13 @@ public sealed class RuntimeForm : Form
             Math.Clamp(color.G + greenDelta, 0, 255),
             Math.Clamp(color.B + blueDelta, 0, 255));
 
+    private static Color Lighten(Color color, float amount) =>
+        Color.FromArgb(
+            color.A,
+            Math.Clamp((int)(color.R + ((255 - color.R) * amount)), 0, 255),
+            Math.Clamp((int)(color.G + ((255 - color.G) * amount)), 0, 255),
+            Math.Clamp((int)(color.B + ((255 - color.B) * amount)), 0, 255));
+
     private static Color Lerp(Color from, Color to, float amount) =>
         Color.FromArgb(
             255,
@@ -1043,6 +1195,7 @@ public sealed class RuntimeForm : Form
             return;
         }
 
+        _viewport.ClearFrame();
         _backBuffer?.Dispose();
         _backBuffer = new Bitmap(size.Width, size.Height);
         _backBufferSize = size;
@@ -1089,6 +1242,8 @@ public sealed class RuntimeForm : Form
             _currentFrame = frame;
             Invalidate();
         }
+
+        public void ClearFrame() => _currentFrame = null;
 
         protected override void OnPaint(PaintEventArgs e)
         {

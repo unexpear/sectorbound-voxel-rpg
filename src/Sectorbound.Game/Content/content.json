@@ -1,12 +1,16 @@
 {
   "materials": [
     { "id": "air", "displayName": "Air", "isSolid": false, "dropItemId": "", "dropCount": 0, "hardness": 0, "tier": 0 },
+    { "id": "water", "displayName": "Water", "isSolid": false, "dropItemId": "", "dropCount": 0, "hardness": 0, "tier": 0 },
     { "id": "rootsoil", "displayName": "Rootsoil", "isSolid": true, "dropItemId": "soil-clod", "dropCount": 1, "hardness": 1, "tier": 1 },
     { "id": "loomstone", "displayName": "Loomstone", "isSolid": true, "dropItemId": "loomstone-fragment", "dropCount": 1, "hardness": 2, "tier": 1 },
     { "id": "cinderclay", "displayName": "Cinderclay", "isSolid": true, "dropItemId": "cinderclay-clump", "dropCount": 1, "hardness": 2, "tier": 1 },
     { "id": "emberstone", "displayName": "Emberstone", "isSolid": true, "dropItemId": "emberstone-shard", "dropCount": 1, "hardness": 3, "tier": 2 },
     { "id": "crystal-silt", "displayName": "Crystal Silt", "isSolid": true, "dropItemId": "crystal-dust", "dropCount": 1, "hardness": 2, "tier": 1 },
     { "id": "shardstone", "displayName": "Shardstone", "isSolid": true, "dropItemId": "crystal-shard", "dropCount": 1, "hardness": 3, "tier": 2 },
+    { "id": "ember-vein", "displayName": "Ember Vein", "isSolid": true, "dropItemId": "emberstone-shard", "dropCount": 2, "hardness": 3, "tier": 2 },
+    { "id": "rootwood", "displayName": "Rootwood", "isSolid": true, "dropItemId": "timber", "dropCount": 1, "hardness": 2, "tier": 1 },
+    { "id": "void-crystal", "displayName": "Void Crystal", "isSolid": true, "dropItemId": "crystal-shard", "dropCount": 2, "hardness": 3, "tier": 2 },
     { "id": "shelter-block", "displayName": "Shelter Block", "isSolid": true, "dropItemId": "shelter-block", "dropCount": 1, "hardness": 1, "tier": 1 },
     { "id": "workbench-block", "displayName": "Workbench", "isSolid": true, "dropItemId": "workbench-block", "dropCount": 1, "hardness": 1, "tier": 1 }
   ],
@@ -47,7 +51,8 @@
       "health": 22,
       "damage": 5,
       "loot": { "fiber": 2, "loomstone-fragment": 1 },
-      "skillGain": 26
+      "skillGain": 26,
+      "scale": { "heightMeters": 1.05, "widthMeters": 0.85, "depthMeters": 1.15 }
     },
     {
       "id": "cinderbat",
@@ -57,7 +62,8 @@
       "health": 28,
       "damage": 7,
       "loot": { "emberstone-shard": 1, "fiber": 1 },
-      "skillGain": 30
+      "skillGain": 30,
+      "scale": { "heightMeters": 0.92, "widthMeters": 1.45, "depthMeters": 0.9 }
     },
     {
       "id": "shardling",
@@ -67,7 +73,8 @@
       "health": 34,
       "damage": 8,
       "loot": { "crystal-shard": 2 },
-      "skillGain": 34
+      "skillGain": 34,
+      "scale": { "heightMeters": 2.35, "widthMeters": 1.25, "depthMeters": 0.95 }
     }
   ],
   "bosses": [
@@ -79,7 +86,8 @@
       "damage": 14,
       "rewards": { "sector-core": 1, "crystal-shard": 3 },
       "bonusXpBySkill": { "combat": 90, "crafting": 40, "mining": 30 },
-      "bonusPerkId": "void-strider"
+      "bonusPerkId": "void-strider",
+      "scale": { "heightMeters": 4.8, "widthMeters": 2.8, "depthMeters": 5.4 }
     }
   ],
   "skills": [
@@ -99,6 +107,53 @@
     { "id": "frontier", "displayName": "Frontier", "inventoryDropPercent": 0.35, "skillPenaltyPercent": 0.10, "corpseRun": false },
     { "id": "hardcore", "displayName": "Hardcore", "inventoryDropPercent": 0.60, "skillPenaltyPercent": 0.20, "corpseRun": true }
   ],
+  "landforms": [
+    {
+      "id": "rooted-highlands",
+      "displayName": "Rooted Highlands",
+      "structureGenerators": [ "root-arch", "ruined-beacon" ],
+      "heightBias": 1,
+      "caveDensity": 0.18,
+      "baseHeight": 17,
+      "largeFeatureAmplitude": 9,
+      "largeFeatureScale": 0.040,
+      "ridgeAmplitude": 4,
+      "ridgeScale": 0.085,
+      "detailAmplitude": 2,
+      "detailScale": 0.140,
+      "caveScale": 0.100
+    },
+    {
+      "id": "ash-badlands",
+      "displayName": "Ash Badlands",
+      "structureGenerators": [ "ash-spire", "broken-furnace" ],
+      "heightBias": -1,
+      "caveDensity": 0.22,
+      "baseHeight": 16,
+      "largeFeatureAmplitude": 11,
+      "largeFeatureScale": 0.036,
+      "ridgeAmplitude": 10,
+      "ridgeScale": 0.110,
+      "detailAmplitude": 3,
+      "detailScale": 0.170,
+      "caveScale": 0.105
+    },
+    {
+      "id": "crystal-rifts",
+      "displayName": "Crystal Rifts",
+      "structureGenerators": [ "crystal-fissure", "buried-obelisk" ],
+      "heightBias": 2,
+      "caveDensity": 0.26,
+      "baseHeight": 20,
+      "largeFeatureAmplitude": 8,
+      "largeFeatureScale": 0.042,
+      "ridgeAmplitude": 12,
+      "ridgeScale": 0.135,
+      "detailAmplitude": 3,
+      "detailScale": 0.210,
+      "caveScale": 0.125
+    }
+  ],
   "biomes": [
     {
       "id": "sunken-wilds",
@@ -107,9 +162,10 @@
       "subsurfaceMaterialId": "loomstone",
       "coreMaterialId": "loomstone",
       "enemyIds": [ "burrowling" ],
-      "structureGenerators": [ "root-arch", "ruined-beacon" ],
-      "heightBias": 1,
-      "caveDensity": 0.18
+      "featureGenerators": [ "reed-cluster", "root-bulb" ],
+      "heat": 0.30,
+      "moisture": 0.82,
+      "relief": 0.38
     },
     {
       "id": "ember-reaches",
@@ -118,9 +174,10 @@
       "subsurfaceMaterialId": "emberstone",
       "coreMaterialId": "emberstone",
       "enemyIds": [ "cinderbat" ],
-      "structureGenerators": [ "ash-spire", "broken-furnace" ],
-      "heightBias": -1,
-      "caveDensity": 0.22
+      "featureGenerators": [ "ember-vent", "slag-column" ],
+      "heat": 0.88,
+      "moisture": 0.20,
+      "relief": 0.63
     },
     {
       "id": "glass-marrow",
@@ -129,14 +186,15 @@
       "subsurfaceMaterialId": "shardstone",
       "coreMaterialId": "shardstone",
       "enemyIds": [ "shardling" ],
-      "structureGenerators": [ "crystal-fissure", "buried-obelisk" ],
-      "heightBias": 2,
-      "caveDensity": 0.26
+      "featureGenerators": [ "crystal-cluster", "shard-fan" ],
+      "heat": 0.56,
+      "moisture": 0.34,
+      "relief": 0.86
     }
   ],
   "planetArchetypes": [
-    { "id": "wilds-home", "displayName": "Wilds", "biomeId": "sunken-wilds", "enemyFocusId": "burrowling", "bossId": "void-wyrm" },
-    { "id": "ember-forge", "displayName": "Forge", "biomeId": "ember-reaches", "enemyFocusId": "cinderbat", "bossId": "void-wyrm" },
-    { "id": "marrow-depths", "displayName": "Marrow", "biomeId": "glass-marrow", "enemyFocusId": "shardling", "bossId": "void-wyrm" }
+    { "id": "wilds-home",    "displayName": "Wilds",  "biomeId": "sunken-wilds",   "landformId": "rooted-highlands", "secondaryBiomeId": "ember-reaches", "secondaryLandformId": "ash-badlands",  "enemyFocusId": "burrowling", "bossId": "void-wyrm" },
+    { "id": "ember-forge",   "displayName": "Forge",  "biomeId": "ember-reaches",  "landformId": "ash-badlands",     "secondaryBiomeId": "glass-marrow",  "secondaryLandformId": "crystal-rifts", "enemyFocusId": "cinderbat",  "bossId": "void-wyrm" },
+    { "id": "marrow-depths", "displayName": "Marrow", "biomeId": "glass-marrow",   "landformId": "crystal-rifts",    "secondaryBiomeId": "sunken-wilds",  "secondaryLandformId": "rooted-highlands", "enemyFocusId": "shardling",  "bossId": "void-wyrm" }
   ]
 }

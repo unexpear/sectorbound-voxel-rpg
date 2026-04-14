@@ -1,9 +1,13 @@
 bin/
 obj/
 .vs/
+.venv/
 .vscode/
+.claude/
 TestResults/
 artifacts/
+voxel_output/
+TESTING/
 
 src/**/bin/
 src/**/obj/

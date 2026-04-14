@@ -15,6 +15,7 @@ Updated: April 10, 2026
 ## Reference And Archive Material
 
 - `game makeing/` is tracked in git, but it is not referenced by the solution, any current `.csproj`, or the Steam packaging script.
+- `voxel_output/` is a generated reference/export lane for raw conversion output, not a runtime input.
 - `docs/asset-shortlist.md` and `docs/generated-voxel-assets.md` are intake/reference notes, not runtime inputs.
 - Root-level shortcuts and launcher links are workspace convenience items, not part of the live solution shape.
 
@@ -24,4 +25,5 @@ Updated: April 10, 2026
 - Put rule coverage and persistence regressions in `tests/`.
 - Put build and publishing automation in `scripts/`.
 - Treat `game makeing/` as a pull-from reference library, not a place the runtime reads from directly.
+- Treat `voxel_output/` and similar conversion/export folders as local reference material until selected assets are copied into a project-owned content path.
 - When an asset graduates from reference to live content, copy/import it into an explicit project-owned location and wire it in through a project or build step.

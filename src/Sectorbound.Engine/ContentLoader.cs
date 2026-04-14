@@ -36,6 +36,7 @@ public static class ContentLoader
             package.Perks ?? [],
             package.Difficulties ?? [],
             package.Biomes ?? [],
+            package.Landforms ?? [],
             package.PlanetArchetypes ?? []);
     }
 
@@ -49,6 +50,7 @@ public static class ContentLoader
         public List<PerkDef>? Perks { get; set; }
         public List<DifficultyDef>? Difficulties { get; set; }
         public List<BiomeDef>? Biomes { get; set; }
+        public List<LandformDef>? Landforms { get; set; }
         public List<PlanetArchetypeDef>? PlanetArchetypes { get; set; }
     }
 
@@ -75,8 +77,18 @@ public static class ContentLoader
         public int Damage { get; set; }
         public Dictionary<string, int> Loot { get; set; } = [];
         public int SkillGain { get; set; }
+        public ActorScaleData? Scale { get; set; }
 
-        public EnemyDef ToRuntime() => new(Id, DisplayName, Family, Danger, Health, Damage, Loot, SkillGain);
+        public EnemyDef ToRuntime() => new(
+            Id,
+            DisplayName,
+            Family,
+            Danger,
+            Health,
+            Damage,
+            Loot,
+            SkillGain,
+            Scale?.ToRuntime() ?? new ActorScaleDef(1.8f, 0.6f, 0.4f));
     }
 
     private sealed class BossData
@@ -89,7 +101,26 @@ public static class ContentLoader
         public Dictionary<string, int> Rewards { get; set; } = [];
         public Dictionary<string, int> BonusXpBySkill { get; set; } = [];
         public string BonusPerkId { get; set; } = string.Empty;
+        public ActorScaleData? Scale { get; set; }
 
-        public BossDef ToRuntime() => new(Id, DisplayName, Danger, Health, Damage, Rewards, BonusXpBySkill, BonusPerkId);
+        public BossDef ToRuntime() => new(
+            Id,
+            DisplayName,
+            Danger,
+            Health,
+            Damage,
+            Rewards,
+            BonusXpBySkill,
+            BonusPerkId,
+            Scale?.ToRuntime() ?? new ActorScaleDef(4.8f, 2.8f, 5.4f));
+    }
+
+    private sealed class ActorScaleData
+    {
+        public float HeightMeters { get; set; }
+        public float WidthMeters { get; set; }
+        public float DepthMeters { get; set; }
+
+        public ActorScaleDef ToRuntime() => new(HeightMeters, WidthMeters, DepthMeters);
     }
 }

@@ -1,3 +1,4 @@
+using System.Drawing;
 using System.Numerics;
 using Sectorbound.Engine;
 
@@ -14,7 +15,8 @@ internal readonly record struct MeshFace(
     Int3 Normal,
     string MaterialId,
     bool CanTarget,
-    string? PaletteId = null);
+    string? PaletteId = null,
+    Color? OverrideColor = null);
 
 internal sealed class ChunkRenderMesh
 {

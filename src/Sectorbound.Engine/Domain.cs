@@ -51,6 +51,11 @@ public sealed record RecipeDef(
     string SkillId,
     int SkillGain);
 
+public sealed record ActorScaleDef(
+    float HeightMeters,
+    float WidthMeters,
+    float DepthMeters);
+
 public sealed record EnemyDef(
     string Id,
     string DisplayName,
@@ -59,7 +64,8 @@ public sealed record EnemyDef(
     int Health,
     int Damage,
     IReadOnlyDictionary<string, int> Loot,
-    int SkillGain);
+    int SkillGain,
+    ActorScaleDef Scale);
 
 public sealed record BossDef(
     string Id,
@@ -69,7 +75,8 @@ public sealed record BossDef(
     int Damage,
     IReadOnlyDictionary<string, int> Rewards,
     IReadOnlyDictionary<string, int> BonusXpBySkill,
-    string BonusPerkId);
+    string BonusPerkId,
+    ActorScaleDef Scale);
 
 public sealed record SkillDef(
     string Id,
@@ -97,16 +104,52 @@ public sealed record BiomeDef(
     string SubsurfaceMaterialId,
     string CoreMaterialId,
     IReadOnlyList<string> EnemyIds,
+    IReadOnlyList<string>? FeatureGenerators = null,
+    double Heat = 0.5,
+    double Moisture = 0.5,
+    double Relief = 0.5);
+
+public sealed record LandformDef(
+    string Id,
+    string DisplayName,
     IReadOnlyList<string> StructureGenerators,
     int HeightBias,
-    double CaveDensity);
+    double CaveDensity,
+    int BaseHeight = 18,
+    int LargeFeatureAmplitude = 8,
+    double LargeFeatureScale = 0.04,
+    int RidgeAmplitude = 5,
+    double RidgeScale = 0.08,
+    int DetailAmplitude = 2,
+    double DetailScale = 0.16,
+    double CaveScale = 0.12);
 
 public sealed record PlanetArchetypeDef(
     string Id,
     string DisplayName,
     string BiomeId,
+    string LandformId,
     string EnemyFocusId,
-    string BossId);
+    string BossId,
+    string SecondaryBiomeId = "",
+    string SecondaryLandformId = "");
+
+public sealed record PlanetLandmark(
+    string StructureId,
+    int OriginX,
+    int OriginZ,
+    int RadiusInOriginalBlocks);
+
+public readonly record struct BiomeFeatureSite(
+    string FeatureId,
+    int OriginX,
+    int OriginZ,
+    int RadiusInOriginalBlocks);
+
+public readonly record struct ScenicPropInstance(
+    string AssetId,
+    Int3 AnchorVoxel,
+    Int3 FacingDirection);
 
 public sealed class ContentDefs
 {
@@ -118,6 +161,7 @@ public sealed class ContentDefs
     private readonly ReadOnlyDictionary<string, PerkDef> _perks;
     private readonly ReadOnlyDictionary<string, DifficultyDef> _difficulties;
     private readonly ReadOnlyDictionary<string, BiomeDef> _biomes;
+    private readonly ReadOnlyDictionary<string, LandformDef> _landforms;
     private readonly ReadOnlyDictionary<string, PlanetArchetypeDef> _planetArchetypes;
 
     public ContentDefs(
@@ -129,6 +173,7 @@ public sealed class ContentDefs
         IEnumerable<PerkDef> perks,
         IEnumerable<DifficultyDef> difficulties,
         IEnumerable<BiomeDef> biomes,
+        IEnumerable<LandformDef> landforms,
         IEnumerable<PlanetArchetypeDef> planetArchetypes)
     {
         _materials = ToReadOnlyLookup(materials, x => x.Id);
@@ -139,6 +184,7 @@ public sealed class ContentDefs
         _perks = ToReadOnlyLookup(perks, x => x.Id);
         _difficulties = ToReadOnlyLookup(difficulties, x => x.Id);
         _biomes = ToReadOnlyLookup(biomes, x => x.Id);
+        _landforms = ToReadOnlyLookup(landforms, x => x.Id);
         _planetArchetypes = ToReadOnlyLookup(planetArchetypes, x => x.Id);
     }
 
@@ -150,6 +196,7 @@ public sealed class ContentDefs
     public IReadOnlyDictionary<string, PerkDef> Perks => _perks;
     public IReadOnlyDictionary<string, DifficultyDef> Difficulties => _difficulties;
     public IReadOnlyDictionary<string, BiomeDef> Biomes => _biomes;
+    public IReadOnlyDictionary<string, LandformDef> Landforms => _landforms;
     public IReadOnlyDictionary<string, PlanetArchetypeDef> PlanetArchetypes => _planetArchetypes;
 
     public MaterialDef GetMaterial(string id) => Lookup(_materials, id, nameof(Materials));
@@ -159,6 +206,7 @@ public sealed class ContentDefs
     public SkillDef GetSkill(string id) => Lookup(_skills, id, nameof(Skills));
     public DifficultyDef GetDifficulty(string id) => Lookup(_difficulties, id, nameof(Difficulties));
     public BiomeDef GetBiome(string id) => Lookup(_biomes, id, nameof(Biomes));
+    public LandformDef GetLandform(string id) => Lookup(_landforms, id, nameof(Landforms));
     public PlanetArchetypeDef GetPlanetArchetype(string id) => Lookup(_planetArchetypes, id, nameof(PlanetArchetypes));
 
     private static ReadOnlyDictionary<string, TItem> ToReadOnlyLookup<TItem>(
@@ -233,16 +281,30 @@ public sealed class PlanetRuntime
         string displayName,
         long planetSeed,
         BiomeDef biomeRules,
+        BiomeDef secondaryBiomeRules,
+        LandformDef landformRules,
+        LandformDef secondaryLandformRules,
         IEnumerable<string> spawnTables,
-        IEnumerable<string> structureGenerators)
+        IEnumerable<PlanetLandmark> landmarks)
     {
         PlanetIndex = planetIndex;
         ArchetypeId = archetypeId;
         DisplayName = displayName;
         PlanetSeed = planetSeed;
         BiomeRules = biomeRules;
+        SecondaryBiomeRules = secondaryBiomeRules;
+        LandformRules = landformRules;
+        SecondaryLandformRules = secondaryLandformRules;
         SpawnTables = spawnTables.ToArray();
-        StructureGenerators = structureGenerators.ToArray();
+        Landmarks = landmarks.ToArray();
+        StructureGenerators = landformRules.StructureGenerators
+            .Concat(secondaryLandformRules.StructureGenerators)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        BiomeFeatureGenerators = (biomeRules.FeatureGenerators ?? [])
+            .Concat(secondaryBiomeRules.FeatureGenerators ?? [])
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
     }
 
     public int PlanetIndex { get; }
@@ -250,9 +312,14 @@ public sealed class PlanetRuntime
     public string DisplayName { get; }
     public long PlanetSeed { get; }
     public BiomeDef BiomeRules { get; }
+    public BiomeDef SecondaryBiomeRules { get; }
+    public LandformDef LandformRules { get; }
+    public LandformDef SecondaryLandformRules { get; }
     public Dictionary<ChunkCoordinate, ChunkData> ChunkRegistry { get; } = [];
     public IReadOnlyList<string> SpawnTables { get; }
+    public IReadOnlyList<PlanetLandmark> Landmarks { get; }
     public IReadOnlyList<string> StructureGenerators { get; }
+    public IReadOnlyList<string> BiomeFeatureGenerators { get; }
 }
 
 public sealed class SectorRuntime

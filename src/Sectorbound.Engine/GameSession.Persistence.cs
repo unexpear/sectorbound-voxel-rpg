@@ -14,6 +14,8 @@ public sealed partial class GameSession
             WorldSeed = WorldSeed,
             CurrentSectorIndex = CurrentSectorIndex,
             CurrentPlanetIndex = CurrentPlanetIndex,
+            VoxelsPerOriginalBlock = GameplayVoxelsPerOriginalBlock,
+            ChunkSizeInVoxels = ChunkSize,
             Player = CapturePlayer(),
             Sectors = _savedSectors.Values.OrderBy(x => x.SectorIndex).ToList()
         };
@@ -179,6 +181,8 @@ public sealed partial class GameSession
         public long WorldSeed { get; set; }
         public int CurrentSectorIndex { get; set; }
         public int CurrentPlanetIndex { get; set; }
+        public int VoxelsPerOriginalBlock { get; set; }
+        public int ChunkSizeInVoxels { get; set; }
         public SavePlayerData Player { get; set; } = new();
         public List<SaveSectorData> Sectors { get; set; } = [];
     }

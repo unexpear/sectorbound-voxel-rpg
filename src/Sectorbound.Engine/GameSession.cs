@@ -6,9 +6,13 @@ namespace Sectorbound.Engine;
 public sealed partial class GameSession
 {
     private const string AirMaterialId = "air";
-    private const int ChunkSize = 16;
+    private const string WaterMaterialId = "water";
+    private const int GameplayVoxelsPerOriginalBlock = 9;
+    private const int ChunkSpanInOriginalBlocks = 4;
+    private const int ChunkSize = ChunkSpanInOriginalBlocks * GameplayVoxelsPerOriginalBlock;
     private const int WorldFloor = 0;
-    private const int WorldCeiling = 48;
+    private const int WorldHeightInOriginalBlocks = 48;
+    private const int WorldCeiling = WorldHeightInOriginalBlocks * GameplayVoxelsPerOriginalBlock;
 
     private static readonly JsonSerializerOptions SaveJsonOptions = new()
     {
@@ -81,7 +85,10 @@ public sealed partial class GameSession
         var save = JsonSerializer.Deserialize<SaveGameData>(File.ReadAllText(savePath), SaveJsonOptions)
             ?? throw new InvalidOperationException("The save file could not be deserialized.");
 
-        var savedSectors = save.Sectors.ToDictionary(x => x.SectorIndex);
+        var savedSectors = save.VoxelsPerOriginalBlock == GameplayVoxelsPerOriginalBlock
+            && save.ChunkSizeInVoxels == ChunkSize
+            ? save.Sectors.ToDictionary(x => x.SectorIndex)
+            : [];
 
         return new GameSession(
             content,

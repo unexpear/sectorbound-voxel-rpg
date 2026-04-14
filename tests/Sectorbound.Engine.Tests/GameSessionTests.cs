@@ -173,14 +173,14 @@ public sealed class GameSessionTests : IDisposable
     {
         var session = GameSession.CreateNew(_content, _tempSaveRoot, "chunks", 1003);
 
-        Assert.Equal(8, session.VoxelsPerOriginalBlock);
-        Assert.Equal(32, session.ChunkSizeInVoxels);
+        Assert.Equal(9, session.VoxelsPerOriginalBlock);
+        Assert.Equal(36, session.ChunkSizeInVoxels);
         Assert.Equal(0, session.MinWorldY);
-        Assert.Equal(384, session.MaxWorldY);
+        Assert.Equal(432, session.MaxWorldY);
         Assert.Equal(new ChunkCoordinate(0, 0, 0), session.GetChunkCoordinateForWorldPosition(new Int3(0, 0, 0)));
-        Assert.Equal(new ChunkCoordinate(0, 0, 0), session.GetChunkCoordinateForWorldPosition(new Int3(31, 31, 31)));
+        Assert.Equal(new ChunkCoordinate(0, 0, 0), session.GetChunkCoordinateForWorldPosition(new Int3(35, 35, 35)));
         Assert.Equal(new ChunkCoordinate(-1, 0, -1), session.GetChunkCoordinateForWorldPosition(new Int3(-1, 4, -1)));
-        Assert.Equal(new ChunkCoordinate(1, 0, 1), session.GetChunkCoordinateForWorldPosition(new Int3(32, 2, 32)));
+        Assert.Equal(new ChunkCoordinate(1, 0, 1), session.GetChunkCoordinateForWorldPosition(new Int3(36, 2, 36)));
     }
 
     [Fact]
@@ -223,6 +223,29 @@ public sealed class GameSessionTests : IDisposable
         Assert.Contains("ash-spire", session.CurrentPlanet.StructureGenerators);
         Assert.Contains("reed-cluster", session.CurrentPlanet.BiomeFeatureGenerators);
         Assert.Contains("ember-vent", session.CurrentPlanet.BiomeFeatureGenerators);
+    }
+
+    [Fact]
+    public void EnemyAndBossScaleMetadataIsExplicitlyAuthoredInMeters()
+    {
+        Assert.Equal(1.05f, _content.GetEnemy("burrowling").Scale.HeightMeters, precision: 2);
+        Assert.Equal(0.92f, _content.GetEnemy("cinderbat").Scale.HeightMeters, precision: 2);
+        Assert.Equal(2.35f, _content.GetEnemy("shardling").Scale.HeightMeters, precision: 2);
+        Assert.Equal(4.8f, _content.GetBoss("void-wyrm").Scale.HeightMeters, precision: 2);
+
+        Assert.All(_content.Enemies.Values, enemy =>
+        {
+            Assert.True(enemy.Scale.HeightMeters > 0f);
+            Assert.True(enemy.Scale.WidthMeters > 0f);
+            Assert.True(enemy.Scale.DepthMeters > 0f);
+        });
+
+        Assert.All(_content.Bosses.Values, boss =>
+        {
+            Assert.True(boss.Scale.HeightMeters > 0f);
+            Assert.True(boss.Scale.WidthMeters > 0f);
+            Assert.True(boss.Scale.DepthMeters > 0f);
+        });
     }
 
     [Fact]
@@ -591,8 +614,8 @@ public sealed class GameSessionTests : IDisposable
 
         var savePath = GameSession.GetSavePath(_tempSaveRoot, "legacy-scale");
         var legacyJson = File.ReadAllText(savePath)
-            .Replace("\"VoxelsPerOriginalBlock\": 8", "\"VoxelsPerOriginalBlock\": 6", StringComparison.Ordinal)
-            .Replace("\"ChunkSizeInVoxels\": 32", "\"ChunkSizeInVoxels\": 16", StringComparison.Ordinal);
+            .Replace("\"VoxelsPerOriginalBlock\": 9", "\"VoxelsPerOriginalBlock\": 6", StringComparison.Ordinal)
+            .Replace("\"ChunkSizeInVoxels\": 36", "\"ChunkSizeInVoxels\": 16", StringComparison.Ordinal);
         File.WriteAllText(savePath, legacyJson);
 
         var loaded = GameSession.Load(_content, _tempSaveRoot, "legacy-scale");

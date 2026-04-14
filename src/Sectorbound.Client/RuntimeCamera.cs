@@ -5,17 +5,17 @@ namespace Sectorbound.Client;
 internal sealed class RuntimeCamera
 {
     private const float CameraSmoothing = 10f;
-    private const float FocusHeight = 1.45f;
-    private const float MinDistance = 4.25f;
-    private const float MaxDistance = 10f;
+    private const float FocusHeight = 1.5f;
+    private const float MinDistance = 5f;
+    private const float MaxDistance = 12f;
     private const float MinPitch = 0.12f;
     private const float MaxPitch = 0.95f;
 
-    private float _distance = 5.75f;
+    private float _distance = 7.5f;
     private float _yaw = -MathF.PI * 0.5f;
     private float _pitch = 0.42f;
 
-    public Vector3 Position { get; private set; } = new(0f, 3.5f, 6f);
+    public Vector3 Position { get; private set; } = new(0f, 4.5f, 7f);
     public Vector3 Target { get; private set; } = Vector3.Zero;
     public Vector3 ForwardOnGround { get; private set; } = new(0f, 0f, -1f);
     public Vector3 RightOnGround { get; private set; } = new(1f, 0f, 0f);
@@ -53,7 +53,7 @@ internal sealed class RuntimeCamera
 
         var aspect = Math.Max(1f, viewportSize.Width / (float)Math.Max(1, viewportSize.Height));
         var view = Matrix4x4.CreateLookAt(Position, focusPoint, Vector3.UnitY);
-        var projection = Matrix4x4.CreatePerspectiveFieldOfView(MathF.PI / 3.2f, aspect, 0.1f, 256f);
+        var projection = Matrix4x4.CreatePerspectiveFieldOfView(MathF.PI / 2.9f, aspect, 0.1f, 256f);
         ViewProjection = view * projection;
     }
 

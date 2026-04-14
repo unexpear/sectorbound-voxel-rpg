@@ -5,12 +5,17 @@ namespace Sectorbound.Client;
 
 internal sealed class ChunkMeshBuilder
 {
-    public ChunkRenderMesh Build(GameSession session, ChunkColumnKey key)
+    public ChunkRenderMesh Build(
+        GameSession session,
+        ChunkColumnKey key,
+        Action<ChunkSliceBatchProgress>? sliceBatchProgress = null)
     {
-        var faces = new List<MeshFace>(2048);
+        var scale = session.VoxelRenderScale;
         var chunkSize = session.ChunkSizeInVoxels;
+        var faces = new List<MeshFace>(chunkSize * chunkSize * 16);
         var startX = key.X * chunkSize;
         var startZ = key.Z * chunkSize;
+        var sampledVolume = ChunkSliceVolume.SampleCurrentPlanet(session, key, sliceBatchProgress);
 
         for (var x = startX; x < startX + chunkSize; x++)
         {
@@ -19,98 +24,117 @@ internal sealed class ChunkMeshBuilder
                 for (var y = session.MinWorldY; y <= session.MaxWorldY; y++)
                 {
                     var blockPosition = new Int3(x, y, z);
-                    if (!session.IsSolidAtCurrentPlanet(blockPosition))
+                    var material = sampledVolume.GetOrAir(blockPosition);
+                    if (material.IsAir)
                     {
                         continue;
                     }
 
-                    var materialId = session.GetMaterialIdAtCurrentPlanet(blockPosition);
-                    if (GeneratedVoxelAssets.TryAddBlockAsset(faces, blockPosition, materialId))
+                    if (GeneratedVoxelAssets.TryAddBlockAsset(faces, blockPosition, material.MaterialId, scale))
                     {
                         continue;
                     }
 
-                    AddFaceIfExposed(session, faces, blockPosition, materialId, new Int3(0, 1, 0));
-                    AddFaceIfExposed(session, faces, blockPosition, materialId, new Int3(1, 0, 0));
-                    AddFaceIfExposed(session, faces, blockPosition, materialId, new Int3(-1, 0, 0));
-                    AddFaceIfExposed(session, faces, blockPosition, materialId, new Int3(0, 0, 1));
-                    AddFaceIfExposed(session, faces, blockPosition, materialId, new Int3(0, 0, -1));
+                    AddFaceIfExposed(sampledVolume, faces, blockPosition, material, new Int3(0, 1, 0), scale);
+                    AddFaceIfExposed(sampledVolume, faces, blockPosition, material, new Int3(1, 0, 0), scale);
+                    AddFaceIfExposed(sampledVolume, faces, blockPosition, material, new Int3(-1, 0, 0), scale);
+                    AddFaceIfExposed(sampledVolume, faces, blockPosition, material, new Int3(0, 0, 1), scale);
+                    AddFaceIfExposed(sampledVolume, faces, blockPosition, material, new Int3(0, 0, -1), scale);
                 }
             }
         }
 
+        GeneratedVoxelAssets.AddScenicPropFaces(faces, session, session.GetScenicPropsForCurrentPlanet(key.X, key.Z));
         return new ChunkRenderMesh(key, faces);
     }
 
     private static void AddFaceIfExposed(
-        GameSession session,
+        ChunkSliceVolume sampledVolume,
         List<MeshFace> faces,
         Int3 blockPosition,
-        string materialId,
-        Int3 normal)
+        ChunkVoxelSample material,
+        Int3 normal,
+        float scale)
     {
         var neighbor = new Int3(blockPosition.X + normal.X, blockPosition.Y + normal.Y, blockPosition.Z + normal.Z);
-        if (session.IsSolidAtCurrentPlanet(neighbor))
+        var neighborMaterial = sampledVolume.GetOrAir(neighbor);
+        if (IsFaceOccluded(material, neighborMaterial))
         {
             return;
         }
 
-        faces.Add(CreateFace(blockPosition, normal, materialId));
+        faces.Add(CreateFace(blockPosition, normal, material.MaterialId, scale, material.IsSolid));
     }
 
-    private static MeshFace CreateFace(Int3 blockPosition, Int3 normal, string materialId)
+    private static bool IsFaceOccluded(ChunkVoxelSample material, ChunkVoxelSample neighborMaterial)
     {
-        var x = blockPosition.X;
-        var y = blockPosition.Y;
-        var z = blockPosition.Z;
+        if (neighborMaterial.IsAir)
+        {
+            return false;
+        }
+
+        if (material.IsSolid)
+        {
+            return neighborMaterial.IsSolid;
+        }
+
+        return neighborMaterial.IsSolid
+            || string.Equals(neighborMaterial.MaterialId, material.MaterialId, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static MeshFace CreateFace(Int3 blockPosition, Int3 normal, string materialId, float scale, bool canTarget)
+    {
+        var x = blockPosition.X * scale;
+        var y = blockPosition.Y * scale;
+        var z = blockPosition.Z * scale;
 
         return normal switch
         {
             { X: 0, Y: 1, Z: 0 } => new MeshFace(
-                new Vector3(x, y + 1, z),
-                new Vector3(x + 1, y + 1, z),
-                new Vector3(x + 1, y + 1, z + 1),
-                new Vector3(x, y + 1, z + 1),
+                new Vector3(x, y + scale, z),
+                new Vector3(x + scale, y + scale, z),
+                new Vector3(x + scale, y + scale, z + scale),
+                new Vector3(x, y + scale, z + scale),
                 blockPosition,
                 normal,
                 materialId,
-                CanTarget: true),
+                CanTarget: canTarget),
             { X: 1, Y: 0, Z: 0 } => new MeshFace(
-                new Vector3(x + 1, y, z),
-                new Vector3(x + 1, y + 1, z),
-                new Vector3(x + 1, y + 1, z + 1),
-                new Vector3(x + 1, y, z + 1),
+                new Vector3(x + scale, y, z),
+                new Vector3(x + scale, y + scale, z),
+                new Vector3(x + scale, y + scale, z + scale),
+                new Vector3(x + scale, y, z + scale),
                 blockPosition,
                 normal,
                 materialId,
-                CanTarget: true),
+                CanTarget: canTarget),
             { X: -1, Y: 0, Z: 0 } => new MeshFace(
-                new Vector3(x, y, z + 1),
-                new Vector3(x, y + 1, z + 1),
-                new Vector3(x, y + 1, z),
+                new Vector3(x, y, z + scale),
+                new Vector3(x, y + scale, z + scale),
+                new Vector3(x, y + scale, z),
                 new Vector3(x, y, z),
                 blockPosition,
                 normal,
                 materialId,
-                CanTarget: true),
+                CanTarget: canTarget),
             { X: 0, Y: 0, Z: 1 } => new MeshFace(
-                new Vector3(x + 1, y, z + 1),
-                new Vector3(x + 1, y + 1, z + 1),
-                new Vector3(x, y + 1, z + 1),
-                new Vector3(x, y, z + 1),
+                new Vector3(x + scale, y, z + scale),
+                new Vector3(x + scale, y + scale, z + scale),
+                new Vector3(x, y + scale, z + scale),
+                new Vector3(x, y, z + scale),
                 blockPosition,
                 normal,
                 materialId,
-                CanTarget: true),
+                CanTarget: canTarget),
             { X: 0, Y: 0, Z: -1 } => new MeshFace(
                 new Vector3(x, y, z),
-                new Vector3(x, y + 1, z),
-                new Vector3(x + 1, y + 1, z),
-                new Vector3(x + 1, y, z),
+                new Vector3(x, y + scale, z),
+                new Vector3(x + scale, y + scale, z),
+                new Vector3(x + scale, y, z),
                 blockPosition,
                 normal,
                 materialId,
-                CanTarget: true),
+                CanTarget: canTarget),
             _ => throw new InvalidOperationException($"Unsupported face normal {normal}.")
         };
     }

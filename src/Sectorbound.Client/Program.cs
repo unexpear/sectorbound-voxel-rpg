@@ -10,7 +10,14 @@ static class Program
         ApplicationConfiguration.Initialize();
         try
         {
-            Application.Run(new RuntimeForm());
+            using var menu = new StartMenuForm();
+            menu.ShowDialog();
+            if (!menu.ShouldStartGame)
+                return;
+
+            Application.Run(new RuntimeForm(
+                newGame: menu.StartNewGame,
+                newGameDifficultyPresetId: menu.SelectedDifficultyPresetId));
         }
         catch (Exception exception)
         {

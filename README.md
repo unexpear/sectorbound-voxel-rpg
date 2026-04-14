@@ -62,6 +62,7 @@ Shelter Blocks and Rift Sigil Core now require a placed `workbench-block` on the
 - `Right click` or `Enter`: place the selected build block against the targeted face
 - `Mouse wheel` or `Q / E`: zoom the chase camera
 - `I`: toggle invert Y look and persist the preference locally
+- `[ / ]`: decrease / increase mouse look speed and persist the preference locally
 - `Shift`: sprint
 - `1 / 2 / 3`: switch planets
 - `Z / X`: cycle the selected build block

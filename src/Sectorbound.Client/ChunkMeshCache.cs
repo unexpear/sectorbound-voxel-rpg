@@ -7,14 +7,17 @@ internal sealed class ChunkMeshCache
     private readonly ChunkMeshBuilder _builder = new();
     private readonly Dictionary<ChunkColumnKey, ChunkRenderMesh> _meshes = [];
 
-    public ChunkRenderMesh GetOrBuild(GameSession session, ChunkColumnKey key)
+    public ChunkRenderMesh GetOrBuild(
+        GameSession session,
+        ChunkColumnKey key,
+        Action<ChunkSliceBatchProgress>? sliceBatchProgress = null)
     {
         if (_meshes.TryGetValue(key, out var cached))
         {
             return cached;
         }
 
-        var mesh = _builder.Build(session, key);
+        var mesh = _builder.Build(session, key, sliceBatchProgress);
         _meshes[key] = mesh;
         return mesh;
     }
